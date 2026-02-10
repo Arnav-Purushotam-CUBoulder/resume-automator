@@ -1,0 +1,58 @@
+{
+  "name": "resume-automator",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Git-backed LaTeX resume management desktop app",
+  "author": "Arnav Purushotam",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "npm run dev:backend",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "typecheck": "npm run typecheck --workspace backend && npm run typecheck --workspace frontend",
+    "desktop:run": "npm run build && electron desktop/main.cjs",
+    "desktop:dev": "concurrently -k \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on tcp:4100 http://127.0.0.1:5173 && ELECTRON_START_URL=http://127.0.0.1:5173 electron desktop/main.cjs\"",
+    "desktop:build": "npm run build && electron-builder --mac --publish never",
+    "desktop:dir": "npm run build && electron-builder --mac dir --publish never"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "nanoid": "^5.0.7"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^34.0.1",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.arnav.resumeautomator",
+    "productName": "Resume Automator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "backend/dist/**/*",
+      "frontend/dist/**/*",
+      "backend/package.json",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "extraMetadata": {
+      "main": "desktop/main.cjs"
+    }
+  }
+}

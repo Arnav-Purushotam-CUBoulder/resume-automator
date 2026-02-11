@@ -39,6 +39,26 @@ function isAllowedMainUrl(url, expectedUrl) {
   );
 }
 
+function shouldForceMainShell(url, expectedFilePath) {
+  if (!url || !url.startsWith('file://')) {
+    return false;
+  }
+
+  try {
+    const currentPath = path.resolve(fileURLToPath(stripHashAndQuery(url)));
+    const expectedPath = path.resolve(expectedFilePath);
+    if (currentPath === expectedPath) {
+      return false;
+    }
+
+    const ext = path.extname(currentPath).toLowerCase();
+    // Never allow top-level navigation to raw assets/documents.
+    return ['.css', '.js', '.mjs', '.json', '.map', '.pdf', '.tex', '.log'].includes(ext);
+  } catch {
+    return false;
+  }
+}
+
 function stripHashAndQuery(url) {
   return url.split('#')[0].split('?')[0];
 }
@@ -117,6 +137,14 @@ function createMainWindow() {
 
     // Keep top-level navigation anchored to the app shell file.
     mainWindow.webContents.on('will-navigate', (event, url) => {
+      if (shouldForceMainShell(url, frontendIndex)) {
+        event.preventDefault();
+        mainWindow.loadFile(frontendIndex).catch(() => {
+          // Ignore reload failures here; did-fail-load will surface startup errors.
+        });
+        return;
+      }
+
       if (isAllowedMainUrl(url, frontendUrl) || isSameFileUrl(url, frontendIndex)) {
         return;
       }
@@ -134,11 +162,26 @@ function createMainWindow() {
 
     mainWindow.webContents.on('did-finish-load', () => {
       const current = mainWindow?.webContents.getURL() ?? '';
+      if (shouldForceMainShell(current, frontendIndex)) {
+        mainWindow?.loadFile(frontendIndex).catch(() => {
+          // Ignore reload failures here; app startup path will surface hard failures.
+        });
+        return;
+      }
       if (isAllowedMainUrl(current, frontendUrl) || isSameFileUrl(current, frontendIndex)) {
         return;
       }
       mainWindow?.loadFile(frontendIndex).catch(() => {
         // Ignore reload failures here; app startup path will surface hard failures.
+      });
+    });
+
+    mainWindow.webContents.on('did-navigate', (_event, url) => {
+      if (!shouldForceMainShell(url, frontendIndex)) {
+        return;
+      }
+      mainWindow?.loadFile(frontendIndex).catch(() => {
+        // Ignore reload failures here; did-finish-load + startup path surface hard failures.
       });
     });
 

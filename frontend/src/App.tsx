@@ -93,10 +93,11 @@ function buildPdfPreviewUrl(url: string): string {
   const params = new URLSearchParams(hash);
 
   if (!params.has('zoom')) {
-    params.set('zoom', 'page-width');
+    // Default to single-page fit; the built-in viewer remains scrollable for multi-page resumes.
+    params.set('zoom', 'page-fit');
   }
   if (!params.has('view')) {
-    params.set('view', 'FitH');
+    params.set('view', 'Fit');
   }
   if (!params.has('pagemode')) {
     params.set('pagemode', 'none');

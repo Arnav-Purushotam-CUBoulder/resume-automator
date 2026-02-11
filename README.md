@@ -48,6 +48,17 @@ npm run build
 npm run desktop:build
 ```
 
+Install/update with a single canonical app copy:
+
+```bash
+npm run desktop:install
+```
+
+This command:
+- Replaces `/Applications/Resume Automator.app`
+- Removes old `/Applications/Resume Automator.app.bak.*` bundles
+- Removes `release/mac-arm64/Resume Automator.app` after install so Spotlight shows only one app
+
 Artifacts:
 
 - `release/mac-arm64/Resume Automator.app`

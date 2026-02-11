@@ -18,7 +18,8 @@
     "desktop:run": "npm run build && electron desktop/main.cjs",
     "desktop:dev": "concurrently -k \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on tcp:4100 http://127.0.0.1:5173 && ELECTRON_START_URL=http://127.0.0.1:5173 electron desktop/main.cjs\"",
     "desktop:build": "npm run build && electron-builder --mac --publish never",
-    "desktop:dir": "npm run build && electron-builder --mac dir --publish never"
+    "desktop:dir": "npm run build && electron-builder --mac dir --publish never",
+    "desktop:install": "npm run desktop:dir && /bin/zsh scripts/install-mac-app.sh"
   },
   "dependencies": {
     "cors": "^2.8.5",

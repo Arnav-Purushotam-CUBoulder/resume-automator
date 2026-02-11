@@ -72,6 +72,8 @@ const defaultGlobalSpacing: GlobalSpacing = {
   headerToFirstSectionPt: -20,
   betweenSectionsPt: -10,
   afterSectionTitlePt: -5,
+  topMarginIn: 0.5,
+  bottomMarginIn: 0.5,
 };
 
 function clampSpacingValue(value: unknown, fallback: number): number {
@@ -81,6 +83,15 @@ function clampSpacingValue(value: unknown, fallback: number): number {
   }
   const rounded = Math.round(numeric * 10) / 10;
   return Math.max(-40, Math.min(40, rounded));
+}
+
+function clampMarginInches(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const rounded = Math.round(numeric * 100) / 100;
+  return Math.max(0.1, Math.min(1.5, rounded));
 }
 
 function diffGlobalPoints(oldGlobal: GlobalCatalog, nextGlobal: GlobalCatalog): string[] {
@@ -170,6 +181,14 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
       afterSectionTitlePt: clampSpacingValue(
         spacing.afterSectionTitlePt,
         defaultGlobalSpacing.afterSectionTitlePt,
+      ),
+      topMarginIn: clampMarginInches(
+        spacing.topMarginIn,
+        defaultGlobalSpacing.topMarginIn,
+      ),
+      bottomMarginIn: clampMarginInches(
+        spacing.bottomMarginIn,
+        defaultGlobalSpacing.bottomMarginIn,
       ),
     },
   };

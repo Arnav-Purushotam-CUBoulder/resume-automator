@@ -75,6 +75,8 @@ export interface GlobalSpacing {
   headerToFirstSectionPt: number;
   betweenSectionsPt: number;
   afterSectionTitlePt: number;
+  topMarginIn: number;
+  bottomMarginIn: number;
 }
 
 export interface GlobalCatalog {

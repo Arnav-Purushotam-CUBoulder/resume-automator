@@ -9,9 +9,24 @@ import {
   SkillCategory,
 } from '../domain/types.js';
 
-function renderPreamble(): string {
+function normalizeInches(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  const rounded = Math.round(value * 100) / 100;
+  return Math.max(0.1, Math.min(1.5, rounded));
+}
+
+function inches(value: number): string {
+  return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function renderPreamble(spacing: GlobalSpacing): string {
+  const topMarginIn = normalizeInches(spacing.topMarginIn, 0.5);
+  const bottomMarginIn = normalizeInches(spacing.bottomMarginIn, 0.5);
+
   return String.raw`\documentclass[letterpaper,11pt]{article}
-\usepackage[margin=0.5in]{geometry}
+\usepackage[left=0.5in,right=0.5in,top=${inches(topMarginIn)}in,bottom=${inches(bottomMarginIn)}in]{geometry}
 \usepackage{xcolor}
 \usepackage{latexsym}
 \usepackage{enumitem}
@@ -172,8 +187,8 @@ function renderProjects(
 ): string {
   const body = entries
     .map(
-      (entry) => String.raw`
-\vspace{7pt}
+      (entry, index) => String.raw`
+${index > 0 ? '\\vspace{7pt}\n' : ''}
 \resumeSubheading
   {${entry.title}}{${entry.dateRange}}
   {${entry.link}}{}
@@ -185,7 +200,6 @@ ${renderPointList(entry.pointIds, points)}
 
   return String.raw`${renderSectionHeading('Projects', spacing, firstVisibleSection)}
 \resumeSubHeadingListStart
-\vspace{-13pt}
 ${body}\resumeSubHeadingListEnd`;
 }
 
@@ -260,5 +274,5 @@ export function renderLatex(data: RenderedResumeData): string {
     .filter((sectionLatex) => sectionLatex.trim().length > 0)
     .join('\n\n');
 
-  return `${renderPreamble()}\n\n${renderHeader(data)}\n\n${sections}\n\n\\end{document}\n`;
+  return `${renderPreamble(data.spacing)}\n\n${renderHeader(data)}\n\n${sections}\n\n\\end{document}\n`;
 }

@@ -466,6 +466,24 @@ function SpacingEditor({ global, onChange }: SpacingEditorProps) {
     >
       <div className="field-grid two-col">
         <label>
+          Top Margin (in)
+          <input
+            type="number"
+            step="0.01"
+            value={spacing.topMarginIn}
+            onChange={(e) => setSpacing('topMarginIn', e.target.value)}
+          />
+        </label>
+        <label>
+          Bottom Margin (in)
+          <input
+            type="number"
+            step="0.01"
+            value={spacing.bottomMarginIn}
+            onChange={(e) => setSpacing('bottomMarginIn', e.target.value)}
+          />
+        </label>
+        <label>
           Header to First Section (pt)
           <input
             type="number"

@@ -36,6 +36,8 @@ export function createSeedGlobal(now: string): GlobalCatalog {
       headerToFirstSectionPt: -20,
       betweenSectionsPt: -10,
       afterSectionTitlePt: -5,
+      topMarginIn: 0.5,
+      bottomMarginIn: 0.5,
     },
     points: {
       pt_os_curl_32bit: {

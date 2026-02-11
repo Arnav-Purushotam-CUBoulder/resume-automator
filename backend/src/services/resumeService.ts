@@ -515,6 +515,105 @@ function ensureVariantResumeMatrix(
   return { resumes, createdResumeIds };
 }
 
+async function removeResumesAndArtifacts(
+  resumes: ResumeDocument[],
+  settings: AppSettings,
+  manifest: Record<string, string>,
+): Promise<Set<string>> {
+  const deletedIds = new Set<string>();
+  const exportRoot = settings.exportPdfDir?.trim();
+
+  for (const resume of resumes) {
+    await deleteResume(resume.id);
+    await fsp.rm(path.join(BUILDS_DIR, resume.id), { recursive: true, force: true });
+    await fsp.rm(path.join(HISTORY_CACHE_DIR, resume.id), { recursive: true, force: true });
+
+    const relativeExportPath = manifest[resume.id];
+    if (relativeExportPath && exportRoot) {
+      const absoluteExportPath = path.join(exportRoot, relativeExportPath);
+      if (fs.existsSync(absoluteExportPath)) {
+        await fsp.unlink(absoluteExportPath);
+      }
+    }
+    delete manifest[resume.id];
+    deletedIds.add(resume.id);
+  }
+
+  return deletedIds;
+}
+
+async function reconcileDeletedResumesFromExportFolder(
+  resumesInput: ResumeDocument[],
+): Promise<{ resumes: ResumeDocument[] }> {
+  const settings = await loadSettings();
+  const exportRoot = settings.exportPdfDir?.trim();
+  if (!exportRoot || !fs.existsSync(exportRoot)) {
+    return { resumes: resumesInput };
+  }
+
+  const manifest = await loadExportManifest();
+  const manifestIds = Object.keys(manifest);
+  if (!manifestIds.length) {
+    return { resumes: resumesInput };
+  }
+
+  const byId = new Map(resumesInput.map((resume) => [resume.id, resume] as const));
+  const staleManifestIds: string[] = [];
+  const missingExportIds: string[] = [];
+
+  for (const resumeId of manifestIds) {
+    const resume = byId.get(resumeId);
+    if (!resume) {
+      staleManifestIds.push(resumeId);
+      continue;
+    }
+    const relativePath = manifest[resumeId];
+    const absolutePath = path.join(exportRoot, relativePath);
+    if (!fs.existsSync(absolutePath)) {
+      missingExportIds.push(resumeId);
+    }
+  }
+
+  for (const staleId of staleManifestIds) {
+    delete manifest[staleId];
+  }
+
+  if (!missingExportIds.length) {
+    if (staleManifestIds.length) {
+      await saveExportManifest(manifest);
+    }
+    return { resumes: resumesInput };
+  }
+
+  const templateIdsToDelete = new Set<string>();
+  for (const resumeId of missingExportIds) {
+    const resume = byId.get(resumeId);
+    if (resume) {
+      templateIdsToDelete.add(resume.templateId || resume.id);
+    }
+  }
+
+  const familyResumes = resumesInput.filter((resume) =>
+    templateIdsToDelete.has(resume.templateId || resume.id),
+  );
+  const deletedIds = await removeResumesAndArtifacts(familyResumes, settings, manifest);
+  await saveExportManifest(manifest);
+
+  if (deletedIds.size > 0) {
+    await recordCommitEvent(
+      `Sync deleted exported resume PDFs (${deletedIds.size})`,
+      [...deletedIds],
+    );
+  }
+
+  if (!deletedIds.size) {
+    return { resumes: resumesInput };
+  }
+  return {
+    resumes: resumesInput.filter((resume) => !deletedIds.has(resume.id)),
+  };
+}
+
 async function normalizeStoredState(): Promise<{
   global: GlobalCatalog;
   resumes: ResumeDocument[];
@@ -525,21 +624,20 @@ async function normalizeStoredState(): Promise<{
   const normalizedResumes = resumesRaw.map((resume) =>
     normalizeResumeVariantMetadata(resume, normalizedGlobal),
   );
-  const ensured = ensureVariantResumeMatrix(normalizedGlobal, normalizedResumes);
 
   const globalChanged = JSON.stringify(globalRaw) !== JSON.stringify(normalizedGlobal);
-  const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(ensured.resumes);
+  const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(normalizedResumes);
 
   if (globalChanged) {
     await saveGlobal(normalizedGlobal);
   }
   if (resumesChanged) {
-    await saveResumes(ensured.resumes);
+    await saveResumes(normalizedResumes);
   }
 
   return {
     global: normalizedGlobal,
-    resumes: ensured.resumes,
+    resumes: normalizedResumes,
   };
 }
 
@@ -570,9 +668,10 @@ export async function getAppState(): Promise<AppStateResponse> {
     normalizeStoredState(),
     loadSettings(),
   ]);
+  const reconciled = await reconcileDeletedResumesFromExportFolder(normalized.resumes);
   return {
     global: normalized.global,
-    resumes: summarize(normalized.resumes),
+    resumes: summarize(reconciled.resumes),
     settings,
   };
 }
@@ -863,22 +962,7 @@ export async function deleteResumeFamily(
 
   const settings = await loadSettings();
   const manifest = await loadExportManifest();
-
-  for (const resume of family) {
-    await deleteResume(resume.id);
-    await fsp.rm(path.join(BUILDS_DIR, resume.id), { recursive: true, force: true });
-    await fsp.rm(path.join(HISTORY_CACHE_DIR, resume.id), { recursive: true, force: true });
-
-    const relativeExportPath = manifest[resume.id];
-    if (relativeExportPath && settings.exportPdfDir?.trim()) {
-      const absoluteExportPath = path.join(settings.exportPdfDir.trim(), relativeExportPath);
-      if (fs.existsSync(absoluteExportPath)) {
-        await fsp.unlink(absoluteExportPath);
-      }
-    }
-    delete manifest[resume.id];
-  }
-
+  await removeResumesAndArtifacts(family, settings, manifest);
   await saveExportManifest(manifest);
   await recordCommitEvent(message, family.map((resume) => resume.id));
 

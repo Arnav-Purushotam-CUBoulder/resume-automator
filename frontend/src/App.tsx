@@ -2399,6 +2399,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.hidden || loading) {
+        return;
+      }
+      loadState().catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [loading, selectedResumeId, selectedEmail, selectedLocation]);
+
+  useEffect(() => {
     if (!selectedResumeId) {
       return;
     }

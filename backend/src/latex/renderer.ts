@@ -20,7 +20,6 @@ function renderPreamble(): string {
 \usepackage{titlesec}
 \usepackage{fancyhdr}
 \usepackage{fontawesome}
-\input{glyphtounicode}
 
 \setlist[itemize]{itemsep=1pt, topsep=0pt, label=\textbullet}
 \pagestyle{fancy}

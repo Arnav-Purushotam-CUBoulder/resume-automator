@@ -88,6 +88,88 @@ function formatDateTime(value?: string): string {
   return date.toLocaleString();
 }
 
+function latexToPlainText(input: string): string {
+  return input
+    .replace(/\\href\{([^}]*)\}\{([^}]*)\}/g, '$2')
+    .replace(/\\textbf\{([^}]*)\}/g, '$1')
+    .replace(/\\textit\{([^}]*)\}/g, '$1')
+    .replace(/\\texttt\{([^}]*)\}/g, '$1')
+    .replace(/\\emph\{([^}]*)\}/g, '$1')
+    .replace(/\\textbar\\\s*/g, '| ')
+    .replace(/\\textasciitilde\{\}/g, '~')
+    .replace(/\\textasciicircum\{\}/g, '^')
+    .replace(/\\#/g, '#')
+    .replace(/\\%/g, '%')
+    .replace(/\\&/g, '&')
+    .replace(/\\_/g, '_')
+    .replace(/\\\{/g, '{')
+    .replace(/\\\}/g, '}')
+    .replace(/\$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function plainToLatexText(input: string): string {
+  return input
+    .replace(/\\/g, '\\textbackslash{}')
+    .replace(/&/g, '\\&')
+    .replace(/%/g, '\\%')
+    .replace(/\$/g, '\\$')
+    .replace(/#/g, '\\#')
+    .replace(/_/g, '\\_')
+    .replace(/{/g, '\\{')
+    .replace(/}/g, '\\}')
+    .replace(/~/g, '\\textasciitilde{}')
+    .replace(/\^/g, '\\textasciicircum{}');
+}
+
+function parseHrefLatex(input: string): { url: string; label: string } {
+  const match = input.match(/\\href\{([^}]*)\}\{([^}]*)\}/);
+  if (!match) {
+    return {
+      url: '',
+      label: latexToPlainText(input),
+    };
+  }
+
+  return {
+    url: match[1],
+    label: latexToPlainText(match[2]),
+  };
+}
+
+function parseProjectLinkLatex(input: string): { url: string; label: string } {
+  const parsed = parseHrefLatex(input);
+  if (parsed.url || parsed.label !== latexToPlainText(input)) {
+    return parsed;
+  }
+
+  const plain = latexToPlainText(input);
+  if (plain.startsWith('http://') || plain.startsWith('https://') || plain.includes('github.com')) {
+    return {
+      url: plain.startsWith('http') ? plain : `https://${plain}`,
+      label: plain,
+    };
+  }
+
+  return {
+    url: '',
+    label: plain,
+  };
+}
+
+function buildHrefLatex(url: string, label: string): string {
+  const trimmedUrl = url.trim();
+  const trimmedLabel = label.trim();
+  const safeLabel = plainToLatexText(trimmedLabel || trimmedUrl || 'Link');
+
+  if (!trimmedUrl) {
+    return safeLabel;
+  }
+
+  return `\\href{${trimmedUrl}}{${safeLabel}}`;
+}
+
 function sectionHasPoints(section: SectionKey): boolean {
   return section === 'experience' || section === 'projects' || section === 'openSource';
 }
@@ -470,7 +552,7 @@ function ExperienceEditor({ global, onChange }: ExperienceEditorProps) {
 
   const patchPoint = (pointId: string, value: string) => {
     const next = deepClone(global);
-    next.points[pointId] = { ...next.points[pointId], text: value };
+    next.points[pointId] = { ...next.points[pointId], text: plainToLatexText(value) };
     onChange(next);
   };
 
@@ -531,7 +613,7 @@ function ExperienceEditor({ global, onChange }: ExperienceEditorProps) {
               {entry.pointIds.map((pointId) => (
                 <div key={pointId} className="point-row">
                   <textarea
-                    value={global.points[pointId]?.text ?? ''}
+                    value={latexToPlainText(global.points[pointId]?.text ?? '')}
                     onChange={(e) => patchPoint(pointId, e.target.value)}
                   />
                   <button className="danger" onClick={() => removePoint(idx, pointId)}>
@@ -589,7 +671,26 @@ function ProjectsEditor({ global, onChange }: ProjectsEditorProps) {
 
   const patchPoint = (pointId: string, value: string) => {
     const next = deepClone(global);
-    next.points[pointId] = { ...next.points[pointId], text: value };
+    next.points[pointId] = { ...next.points[pointId], text: plainToLatexText(value) };
+    onChange(next);
+  };
+
+  const setProjectTitle = (idx: number, title: string) => {
+    const next = deepClone(global);
+    next.sections.projects[idx].title = plainToLatexText(title);
+    onChange(next);
+  };
+
+  const setProjectLink = (idx: number, link: string) => {
+    const next = deepClone(global);
+    const clean = link.trim();
+    const normalized =
+      clean && !clean.startsWith('http://') && !clean.startsWith('https://')
+        ? `https://${clean}`
+        : clean;
+    next.sections.projects[idx].link = normalized
+      ? buildHrefLatex(normalized, normalized)
+      : '';
     onChange(next);
   };
 
@@ -618,7 +719,7 @@ function ProjectsEditor({ global, onChange }: ProjectsEditorProps) {
         {projects.map((entry, idx) => (
           <div key={entry.id} className="editor-card">
             <div className="editor-card-header">
-              <strong>{entry.title || 'Project Entry'}</strong>
+              <strong>{latexToPlainText(entry.title) || 'Project Entry'}</strong>
               <button onClick={() => removeProject(idx)} className="danger">
                 Remove
               </button>
@@ -627,8 +728,8 @@ function ProjectsEditor({ global, onChange }: ProjectsEditorProps) {
               <label>
                 Title
                 <input
-                  value={entry.title}
-                  onChange={(e) => patchEntry(idx, 'title', e.target.value)}
+                  value={latexToPlainText(entry.title)}
+                  onChange={(e) => setProjectTitle(idx, e.target.value)}
                 />
               </label>
               <label>
@@ -639,10 +740,10 @@ function ProjectsEditor({ global, onChange }: ProjectsEditorProps) {
                 />
               </label>
               <label className="span-2">
-                Link LaTeX
+                Link URL
                 <input
-                  value={entry.link}
-                  onChange={(e) => patchEntry(idx, 'link', e.target.value)}
+                  value={parseProjectLinkLatex(entry.link).url}
+                  onChange={(e) => setProjectLink(idx, e.target.value)}
                 />
               </label>
             </div>
@@ -652,7 +753,7 @@ function ProjectsEditor({ global, onChange }: ProjectsEditorProps) {
               {entry.pointIds.map((pointId) => (
                 <div key={pointId} className="point-row">
                   <textarea
-                    value={global.points[pointId]?.text ?? ''}
+                    value={latexToPlainText(global.points[pointId]?.text ?? '')}
                     onChange={(e) => patchPoint(pointId, e.target.value)}
                   />
                   <button className="danger" onClick={() => removePoint(idx, pointId)}>
@@ -711,7 +812,25 @@ function OpenSourceEditor({ global, onChange }: OpenSourceEditorProps) {
 
   const patchPoint = (pointId: string, value: string) => {
     const next = deepClone(global);
-    next.points[pointId] = { ...next.points[pointId], text: value };
+    next.points[pointId] = { ...next.points[pointId], text: plainToLatexText(value) };
+    onChange(next);
+  };
+
+  const setEntryDisplayTitle = (idx: number, title: string) => {
+    const next = deepClone(global);
+    const entry = next.sections.openSource[idx];
+    const fallbackUrl = parseHrefLatex(entry.title).url;
+    const url = entry.link || fallbackUrl;
+    entry.title = buildHrefLatex(url, title);
+    onChange(next);
+  };
+
+  const setEntryLink = (idx: number, link: string) => {
+    const next = deepClone(global);
+    const entry = next.sections.openSource[idx];
+    const currentLabel = parseHrefLatex(entry.title).label || entry.link || 'Repository';
+    entry.link = link;
+    entry.title = buildHrefLatex(link, currentLabel);
     onChange(next);
   };
 
@@ -740,17 +859,17 @@ function OpenSourceEditor({ global, onChange }: OpenSourceEditorProps) {
         {openSource.map((entry, idx) => (
           <div key={entry.id} className="editor-card">
             <div className="editor-card-header">
-              <strong>{entry.title || 'Open Source Entry'}</strong>
+              <strong>{parseHrefLatex(entry.title).label || 'Open Source Entry'}</strong>
               <button onClick={() => removeEntry(idx)} className="danger">
                 Remove
               </button>
             </div>
             <div className="field-grid two-col">
               <label>
-                Title LaTeX
+                Repository
                 <input
-                  value={entry.title}
-                  onChange={(e) => patchEntry(idx, 'title', e.target.value)}
+                  value={parseHrefLatex(entry.title).label}
+                  onChange={(e) => setEntryDisplayTitle(idx, e.target.value)}
                 />
               </label>
               <label>
@@ -771,7 +890,7 @@ function OpenSourceEditor({ global, onChange }: OpenSourceEditorProps) {
                 Link
                 <input
                   value={entry.link}
-                  onChange={(e) => patchEntry(idx, 'link', e.target.value)}
+                  onChange={(e) => setEntryLink(idx, e.target.value)}
                 />
               </label>
             </div>
@@ -781,7 +900,7 @@ function OpenSourceEditor({ global, onChange }: OpenSourceEditorProps) {
               {entry.pointIds.map((pointId) => (
                 <div key={pointId} className="point-row">
                   <textarea
-                    value={global.points[pointId]?.text ?? ''}
+                    value={latexToPlainText(global.points[pointId]?.text ?? '')}
                     onChange={(e) => patchPoint(pointId, e.target.value)}
                   />
                   <button className="danger" onClick={() => removePoint(idx, pointId)}>
@@ -1270,7 +1389,56 @@ function ResumeStudio({
       if (!next.local.points[pointId]) {
         return prev;
       }
-      next.local.points[pointId].text = text;
+      next.local.points[pointId].text = plainToLatexText(text);
+      return next;
+    });
+  };
+
+  const updateLocalProjectLink = (localId: string, url: string) => {
+    setDraft((prev) => {
+      const next = deepClone(prev);
+      const entry = next.local.projects.find((item) => item.id === localId);
+      if (!entry) {
+        return prev;
+      }
+      const clean = url.trim();
+      const normalized =
+        clean && !clean.startsWith('http://') && !clean.startsWith('https://')
+          ? `https://${clean}`
+          : clean;
+      entry.link = normalized ? buildHrefLatex(normalized, normalized) : '';
+      return next;
+    });
+  };
+
+  const updateLocalOpenSourceTitle = (localId: string, title: string) => {
+    setDraft((prev) => {
+      const next = deepClone(prev);
+      const entry = next.local.openSource.find((item) => item.id === localId);
+      if (!entry) {
+        return prev;
+      }
+      const url = entry.link || parseHrefLatex(entry.title).url;
+      entry.title = buildHrefLatex(url, title);
+      return next;
+    });
+  };
+
+  const updateLocalOpenSourceLink = (localId: string, url: string) => {
+    setDraft((prev) => {
+      const next = deepClone(prev);
+      const entry = next.local.openSource.find((item) => item.id === localId);
+      if (!entry) {
+        return prev;
+      }
+      const clean = url.trim();
+      const normalized =
+        clean && !clean.startsWith('http://') && !clean.startsWith('https://')
+          ? `https://${clean}`
+          : clean;
+      entry.link = normalized;
+      const label = parseHrefLatex(entry.title).label || 'Repository';
+      entry.title = buildHrefLatex(normalized, label);
       return next;
     });
   };
@@ -1607,11 +1775,16 @@ function ResumeStudio({
             <label>
               Title
               <input
-                value={(source as ProjectEntry).title}
+                value={latexToPlainText((source as ProjectEntry).title)}
                 disabled={!isLocal}
                 onChange={(e) =>
                   isLocal &&
-                  updateLocalEntryField(section, ref.localId!, 'title', e.target.value)
+                  updateLocalEntryField(
+                    section,
+                    ref.localId!,
+                    'title',
+                    plainToLatexText(e.target.value),
+                  )
                 }
               />
             </label>
@@ -1629,11 +1802,11 @@ function ResumeStudio({
             <label className="span-2">
               Link
               <input
-                value={(source as ProjectEntry).link}
+                value={parseProjectLinkLatex((source as ProjectEntry).link).url}
                 disabled={!isLocal}
                 onChange={(e) =>
                   isLocal &&
-                  updateLocalEntryField(section, ref.localId!, 'link', e.target.value)
+                  updateLocalProjectLink(ref.localId!, e.target.value)
                 }
               />
             </label>
@@ -1643,13 +1816,13 @@ function ResumeStudio({
         {section === 'openSource' && (
           <div className="field-grid two-col">
             <label>
-              Title
+              Repository
               <input
-                value={(source as OpenSourceEntry).title}
+                value={parseHrefLatex((source as OpenSourceEntry).title).label}
                 disabled={!isLocal}
                 onChange={(e) =>
                   isLocal &&
-                  updateLocalEntryField(section, ref.localId!, 'title', e.target.value)
+                  updateLocalOpenSourceTitle(ref.localId!, e.target.value)
                 }
               />
             </label>
@@ -1678,11 +1851,14 @@ function ResumeStudio({
             <label>
               Link
               <input
-                value={(source as OpenSourceEntry).link}
+                value={
+                  (source as OpenSourceEntry).link ||
+                  parseHrefLatex((source as OpenSourceEntry).title).url
+                }
                 disabled={!isLocal}
                 onChange={(e) =>
                   isLocal &&
-                  updateLocalEntryField(section, ref.localId!, 'link', e.target.value)
+                  updateLocalOpenSourceLink(ref.localId!, e.target.value)
                 }
               />
             </label>
@@ -1696,17 +1872,22 @@ function ResumeStudio({
               <div key={`${point.sourcePointId}-${point.effectivePointId}`} className="point-row">
                 {point.isLocalPoint ? (
                   <textarea
-                    value={point.text}
+                    value={latexToPlainText(point.text)}
                     onChange={(e) => updateLocalPoint(point.effectivePointId, e.target.value)}
                   />
                 ) : (
-                  <textarea value={point.text} readOnly />
+                  <textarea value={latexToPlainText(point.text)} readOnly />
                 )}
                 <div className="row-actions">
                   {!point.isLocalPoint && (
                     <button
                       onClick={() =>
-                        handleOverride(section, refId, point.sourcePointId, point.text)
+                        handleOverride(
+                          section,
+                          refId,
+                          point.sourcePointId,
+                          latexToPlainText(point.text),
+                        )
                       }
                     >
                       Override in this resume
@@ -2155,7 +2336,7 @@ export default function App() {
         section,
         refId,
         pointId,
-        text: currentText,
+        text: plainToLatexText(currentText),
       });
       setDetail(updated);
       const latest = await getState();

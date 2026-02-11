@@ -32,6 +32,11 @@ export function createSeedGlobal(now: string): GlobalCatalog {
       emails: ['arnavpsusa@gmail.com'],
       locations: ['Boulder, CO, USA'],
     },
+    spacing: {
+      headerToFirstSectionPt: -20,
+      betweenSectionsPt: -10,
+      afterSectionTitlePt: -5,
+    },
     points: {
       pt_os_curl_32bit: {
         id: 'pt_os_curl_32bit',

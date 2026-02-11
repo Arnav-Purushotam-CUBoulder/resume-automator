@@ -34,7 +34,14 @@ import {
 } from './types/domain';
 import { deepClone } from './utils/clone';
 
-type TabKey = 'resumes' | 'header' | 'emails' | 'locations' | 'output' | SectionKey;
+type TabKey =
+  | 'resumes'
+  | 'header'
+  | 'spacing'
+  | 'emails'
+  | 'locations'
+  | 'output'
+  | SectionKey;
 type StudioMode = 'blocks' | 'latex';
 type ThemeMode = 'classic' | 'liquid' | 'dark';
 
@@ -43,6 +50,7 @@ const themeStorageKey = 'resume_automator_theme_mode';
 const tabOrder: TabKey[] = [
   'resumes',
   'header',
+  'spacing',
   'emails',
   'locations',
   'output',
@@ -56,6 +64,7 @@ const tabOrder: TabKey[] = [
 const tabLabels: Record<TabKey, string> = {
   resumes: 'Resumes',
   header: 'Header',
+  spacing: 'Spacing',
   emails: 'Emails',
   locations: 'Locations',
   output: 'PDF Sync',
@@ -430,6 +439,67 @@ function LocationVariantsEditor({ global, onChange }: LocationVariantsEditorProp
           </button>
         </div>
       </div>
+    </SectionPanel>
+  );
+}
+
+interface SpacingEditorProps {
+  global: GlobalCatalog;
+  onChange: (global: GlobalCatalog) => void;
+}
+
+function SpacingEditor({ global, onChange }: SpacingEditorProps) {
+  const spacing = global.spacing;
+
+  const setSpacing = (key: keyof GlobalCatalog['spacing'], raw: string) => {
+    const numeric = Number(raw);
+    const value = Number.isFinite(numeric) ? numeric : 0;
+    const next = deepClone(global);
+    next.spacing[key] = value;
+    onChange(next);
+  };
+
+  return (
+    <SectionPanel
+      title="Global Section Spacing"
+      subtitle="Controls vertical spacing for all resumes. Use negative values to tighten, positive values to add space."
+    >
+      <div className="field-grid two-col">
+        <label>
+          Header to First Section (pt)
+          <input
+            type="number"
+            step="0.5"
+            value={spacing.headerToFirstSectionPt}
+            onChange={(e) => setSpacing('headerToFirstSectionPt', e.target.value)}
+          />
+        </label>
+        <label>
+          Between Sections (pt)
+          <input
+            type="number"
+            step="0.5"
+            value={spacing.betweenSectionsPt}
+            onChange={(e) => setSpacing('betweenSectionsPt', e.target.value)}
+          />
+        </label>
+        <label>
+          Space Below Section Title (pt)
+          <input
+            type="number"
+            step="0.5"
+            value={spacing.afterSectionTitlePt}
+            onChange={(e) => setSpacing('afterSectionTitlePt', e.target.value)}
+          />
+        </label>
+      </div>
+      <p className="muted-note">
+        Save via
+        {' '}
+        <strong>Commit Global Changes</strong>
+        {' '}
+        to recompile resumes with new spacing.
+      </p>
     </SectionPanel>
   );
 }
@@ -2845,6 +2915,9 @@ export default function App() {
 
           {activeTab === 'header' && (
             <HeaderEditor global={draftGlobal} onChange={setDraftGlobal} />
+          )}
+          {activeTab === 'spacing' && (
+            <SpacingEditor global={draftGlobal} onChange={setDraftGlobal} />
           )}
           {activeTab === 'emails' && (
             <EmailVariantsEditor global={draftGlobal} onChange={setDraftGlobal} />

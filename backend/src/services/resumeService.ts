@@ -6,6 +6,7 @@ import {
   AppSettings,
   CommitEvent,
   GlobalCatalog,
+  GlobalSpacing,
   RenderedResumeData,
   ResumeDocument,
   ResumeSummary,
@@ -67,6 +68,21 @@ function summarize(resumes: ResumeDocument[]): ResumeSummary[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const defaultGlobalSpacing: GlobalSpacing = {
+  headerToFirstSectionPt: -20,
+  betweenSectionsPt: -10,
+  afterSectionTitlePt: -5,
+};
+
+function clampSpacingValue(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const rounded = Math.round(numeric * 10) / 10;
+  return Math.max(-40, Math.min(40, rounded));
+}
+
 function diffGlobalPoints(oldGlobal: GlobalCatalog, nextGlobal: GlobalCatalog): string[] {
   const ids = new Set<string>([
     ...Object.keys(oldGlobal.points),
@@ -89,11 +105,13 @@ function hasGlobalStructuralChange(oldGlobal: GlobalCatalog, nextGlobal: GlobalC
   const oldShape = {
     header: oldGlobal.header,
     contactVariants: oldGlobal.contactVariants,
+    spacing: oldGlobal.spacing,
     sections: oldGlobal.sections,
   };
   const nextShape = {
     header: nextGlobal.header,
     contactVariants: nextGlobal.contactVariants,
+    spacing: nextGlobal.spacing,
     sections: nextGlobal.sections,
   };
   return JSON.stringify(oldShape) !== JSON.stringify(nextShape);
@@ -118,6 +136,7 @@ function uniqueNonEmpty(values: string[]): string[] {
 function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
   const fallbackEmail = global.header.email?.trim() || 'user@example.com';
   const fallbackLocation = global.header.location?.trim() || 'Unknown, USA';
+  const spacing = global.spacing ?? defaultGlobalSpacing;
 
   const emails = uniqueNonEmpty([
     ...(global.contactVariants?.emails ?? []),
@@ -138,6 +157,20 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
     contactVariants: {
       emails: emails.length ? emails : [fallbackEmail],
       locations: locations.length ? locations : [fallbackLocation],
+    },
+    spacing: {
+      headerToFirstSectionPt: clampSpacingValue(
+        spacing.headerToFirstSectionPt,
+        defaultGlobalSpacing.headerToFirstSectionPt,
+      ),
+      betweenSectionsPt: clampSpacingValue(
+        spacing.betweenSectionsPt,
+        defaultGlobalSpacing.betweenSectionsPt,
+      ),
+      afterSectionTitlePt: clampSpacingValue(
+        spacing.afterSectionTitlePt,
+        defaultGlobalSpacing.afterSectionTitlePt,
+      ),
     },
   };
 }

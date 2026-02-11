@@ -197,6 +197,7 @@ export function buildRenderedResumeData(
 
   return {
     header,
+    spacing: global.spacing,
     points: mergedPoints,
     sectionOrder: resume.sectionOrder,
     sectionVisibility: resume.sectionVisibility,

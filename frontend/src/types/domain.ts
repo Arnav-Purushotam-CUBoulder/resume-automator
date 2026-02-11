@@ -61,12 +61,19 @@ export interface OpenSourceEntry {
   pointIds: string[];
 }
 
+export interface GlobalSpacing {
+  headerToFirstSectionPt: number;
+  betweenSectionsPt: number;
+  afterSectionTitlePt: number;
+}
+
 export interface GlobalCatalog {
   header: HeaderInfo;
   contactVariants: {
     emails: string[];
     locations: string[];
   };
+  spacing: GlobalSpacing;
   points: Record<string, Point>;
   sections: {
     education: EducationEntry[];
@@ -120,6 +127,7 @@ export interface ResumeDocument {
 
 export interface RenderedResumeData {
   header: HeaderInfo;
+  spacing: GlobalSpacing;
   points: Record<string, Point>;
   sectionOrder: SectionKey[];
   sectionVisibility: Record<SectionKey, boolean>;

@@ -1,6 +1,7 @@
 import {
   EducationEntry,
   ExperienceEntry,
+  GlobalSpacing,
   OpenSourceEntry,
   ProjectEntry,
   RenderedResumeData,
@@ -61,7 +62,40 @@ function renderHeader(data: RenderedResumeData): string {
 \end{center}`;
 }
 
-function renderEducation(entries: EducationEntry[]): string {
+function normalizePt(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.round(value * 10) / 10;
+}
+
+function pt(value: number): string {
+  const normalized = Math.abs(value) % 1 === 0 ? value.toFixed(0) : value.toFixed(1);
+  return `${normalized}pt`;
+}
+
+function renderSectionHeading(
+  title: string,
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
+  const sectionTop = normalizePt(
+    firstVisibleSection ? spacing.headerToFirstSectionPt : spacing.betweenSectionsPt,
+    firstVisibleSection ? -20 : -10,
+  );
+  const afterTitle = normalizePt(spacing.afterSectionTitlePt, -5);
+
+  return String.raw`
+\vspace{${pt(sectionTop)}}
+\section{${title}}
+\vspace{${pt(afterTitle)}}`;
+}
+
+function renderEducation(
+  entries: EducationEntry[],
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
   const rows = entries
     .map(
       (entry) => String.raw`  \resumeSubheading
@@ -73,15 +107,16 @@ function renderEducation(entries: EducationEntry[]): string {
     )
     .join('\n');
 
-  return String.raw`
-\vspace{-20pt}
-\section{Education}
-\vspace{-5pt}
-\resumeSubHeadingListStart
+  return `${renderSectionHeading('Education', spacing, firstVisibleSection)}
+\\resumeSubHeadingListStart
 ${rows}\resumeSubHeadingListEnd`;
 }
 
-function renderSkills(entries: SkillCategory[]): string {
+function renderSkills(
+  entries: SkillCategory[],
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
   const rows = entries
     .map(
       (entry) =>
@@ -89,11 +124,8 @@ function renderSkills(entries: SkillCategory[]): string {
     )
     .join('\n');
 
-  return String.raw`
-\vspace{-10pt}
-\section{Skills}
-\vspace{-5pt}
-\begin{itemize}[leftmargin=0.15in, label={}, itemsep=1pt, topsep=0pt, parsep=0pt, partopsep=0pt]
+  return `${renderSectionHeading('Skills', spacing, firstVisibleSection)}
+\\begin{itemize}[leftmargin=0.15in, label={}, itemsep=1pt, topsep=0pt, parsep=0pt, partopsep=0pt]
 ${rows}
 \end{itemize}`;
 }
@@ -110,7 +142,12 @@ ${items}
   \resumeItemListEnd`;
 }
 
-function renderOpenSource(entries: OpenSourceEntry[], points: RenderedResumeData['points']): string {
+function renderOpenSource(
+  entries: OpenSourceEntry[],
+  points: RenderedResumeData['points'],
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
   const body = entries
     .map(
       (entry) => String.raw`
@@ -122,15 +159,17 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return String.raw`
-\vspace{-9pt}
-\section{Open Source Contributions}
-\vspace{-8pt}
-\resumeSubHeadingListStart
+  return `${renderSectionHeading('Open Source Contributions', spacing, firstVisibleSection)}
+\\resumeSubHeadingListStart
 ${body}\resumeSubHeadingListEnd`;
 }
 
-function renderProjects(entries: ProjectEntry[], points: RenderedResumeData['points']): string {
+function renderProjects(
+  entries: ProjectEntry[],
+  points: RenderedResumeData['points'],
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
   const body = entries
     .map(
       (entry) => String.raw`
@@ -144,15 +183,18 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return String.raw`
-\vspace{-10pt}
-\section{Projects}
-\resumeSubHeadingListStart
+  return `${renderSectionHeading('Projects', spacing, firstVisibleSection)}
+\\resumeSubHeadingListStart
 \vspace{-13pt}
 ${body}\resumeSubHeadingListEnd`;
 }
 
-function renderExperience(entries: ExperienceEntry[], points: RenderedResumeData['points']): string {
+function renderExperience(
+  entries: ExperienceEntry[],
+  points: RenderedResumeData['points'],
+  spacing: GlobalSpacing,
+  firstVisibleSection: boolean,
+): string {
   const body = entries
     .map(
       (entry) => String.raw`
@@ -166,39 +208,56 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return String.raw`
-\vspace{-10pt}
-\section{Experience}
-\vspace{-5pt}
-\resumeSubHeadingListStart
+  return `${renderSectionHeading('Experience', spacing, firstVisibleSection)}
+\\resumeSubHeadingListStart
 ${body}\resumeSubHeadingListEnd`;
 }
 
-function renderSection(section: SectionKey, data: RenderedResumeData): string {
+function renderSection(
+  section: SectionKey,
+  data: RenderedResumeData,
+  firstVisibleSection: boolean,
+): string {
   if (!data.sectionVisibility[section]) {
     return '';
   }
 
   switch (section) {
     case 'education':
-      return renderEducation(data.sections.education);
+      return renderEducation(data.sections.education, data.spacing, firstVisibleSection);
     case 'skills':
-      return renderSkills(data.sections.skills);
+      return renderSkills(data.sections.skills, data.spacing, firstVisibleSection);
     case 'openSource':
-      return renderOpenSource(data.sections.openSource, data.points);
+      return renderOpenSource(
+        data.sections.openSource,
+        data.points,
+        data.spacing,
+        firstVisibleSection,
+      );
     case 'projects':
-      return renderProjects(data.sections.projects, data.points);
+      return renderProjects(
+        data.sections.projects,
+        data.points,
+        data.spacing,
+        firstVisibleSection,
+      );
     case 'experience':
-      return renderExperience(data.sections.experience, data.points);
+      return renderExperience(
+        data.sections.experience,
+        data.points,
+        data.spacing,
+        firstVisibleSection,
+      );
     default:
       return '';
   }
 }
 
 export function renderLatex(data: RenderedResumeData): string {
-  const sections = data.sectionOrder
-    .map((section) => renderSection(section, data))
-    .filter((section) => section.trim().length > 0)
+  const visibleSections = data.sectionOrder.filter((section) => data.sectionVisibility[section]);
+  const sections = visibleSections
+    .map((section, index) => renderSection(section, data, index === 0))
+    .filter((sectionLatex) => sectionLatex.trim().length > 0)
     .join('\n\n');
 
   return `${renderPreamble()}\n\n${renderHeader(data)}\n\n${sections}\n\n\\end{document}\n`;

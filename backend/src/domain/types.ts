@@ -71,12 +71,19 @@ export interface GlobalSections {
   experience: ExperienceEntry[];
 }
 
+export interface GlobalSpacing {
+  headerToFirstSectionPt: number;
+  betweenSectionsPt: number;
+  afterSectionTitlePt: number;
+}
+
 export interface GlobalCatalog {
   header: HeaderInfo;
   contactVariants: {
     emails: string[];
     locations: string[];
   };
+  spacing: GlobalSpacing;
   points: Record<string, Point>;
   sections: GlobalSections;
   updatedAt: string;
@@ -150,6 +157,7 @@ export interface AppSettings {
 
 export interface RenderedResumeData {
   header: HeaderInfo;
+  spacing: GlobalSpacing;
   sections: {
     education: EducationEntry[];
     skills: SkillCategory[];

@@ -27,7 +27,7 @@ import {
   saveResumes,
 } from '../storage/dataStore.js';
 import { nowIso } from '../utils/time.js';
-import { commitAll, readFileAtCommit } from './gitService.js';
+import { commitAll, listFileCommitHashes, readFileAtCommit } from './gitService.js';
 import {
   allSectionKeys,
   buildRenderedResumeData,
@@ -566,6 +566,23 @@ export async function updateGlobalCatalog(
     resumes: summarize(latestResumes),
     settings,
   };
+}
+
+export async function rollbackLastGlobalCatalogChange(
+  message = 'Rollback last global change',
+): Promise<AppStateResponse | null> {
+  const commitHashes = await listFileCommitHashes('global.json', 100);
+  if (commitHashes.length < 2) {
+    return null;
+  }
+
+  const targetCommit = commitHashes[1];
+  const snapshotRaw = await readFileAtCommit(targetCommit, 'global.json');
+  const snapshotGlobal = JSON.parse(snapshotRaw) as GlobalCatalog;
+  return updateGlobalCatalog(
+    snapshotGlobal,
+    `${message} (restore ${targetCommit.slice(0, 10)})`,
+  );
 }
 
 export async function updateResumeDocument(

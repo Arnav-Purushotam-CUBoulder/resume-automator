@@ -40,6 +40,13 @@ export function saveGlobal(global: GlobalCatalog, message: string): Promise<AppS
   });
 }
 
+export function rollbackLastGlobal(message: string): Promise<AppStateResponse> {
+  return request<AppStateResponse>('/api/global/rollback-last', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
 export async function getSettings(): Promise<AppSettings> {
   const data = await request<{ settings: AppSettings }>('/api/settings');
   return data.settings;

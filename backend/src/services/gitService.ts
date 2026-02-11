@@ -33,3 +33,18 @@ export async function readFileAtCommit(
   );
   return stdout;
 }
+
+export async function listFileCommitHashes(
+  relativePath: string,
+  limit = 50,
+): Promise<string[]> {
+  const { stdout } = await runCommand(
+    'git',
+    ['log', `-${limit}`, '--format=%H', '--', relativePath],
+    REPO_ROOT,
+  );
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}

@@ -11,6 +11,7 @@ import {
   getResumeDetail,
   listResumeHistory,
   overridePointForResume,
+  rollbackLastGlobalCatalogChange,
   setResumeCustomLatex,
   updateAppSettings,
   updateGlobalCatalog,
@@ -57,6 +58,16 @@ export function createApiRouter(): Router {
 
     const message = parseMessage(req.body?.message, 'Update global resume sections');
     const state = await updateGlobalCatalog(nextGlobal, message);
+    res.json(state);
+  });
+
+  router.post('/global/rollback-last', async (req, res) => {
+    const message = parseMessage(req.body?.message, 'Rollback last global change');
+    const state = await rollbackLastGlobalCatalogChange(message);
+    if (!state) {
+      res.status(409).json({ error: 'No previous global state available to roll back.' });
+      return;
+    }
     res.json(state);
   });
 

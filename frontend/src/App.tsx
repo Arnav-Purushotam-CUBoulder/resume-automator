@@ -10,6 +10,7 @@ import {
   getResumeDetail,
   getState,
   overridePoint,
+  rollbackLastGlobal,
   saveCustomLatex,
   saveGlobal,
   saveSettings,
@@ -2263,6 +2264,24 @@ export default function App() {
     });
   };
 
+  const rollbackGlobal = async () => {
+    await withTask(async () => {
+      const updated = await rollbackLastGlobal(
+        'Rollback last global change and compile affected resumes',
+      );
+      const sorted = { ...updated, resumes: sortByName(updated.resumes) };
+      setState(sorted);
+      setDraftGlobal(deepClone(sorted.global));
+      setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+
+      if (selectedResumeId) {
+        await loadResumeContext(selectedResumeId);
+      }
+
+      setNotice('Rolled back last global change and recompiled affected resumes.');
+    });
+  };
+
   const commitSettings = async () => {
     if (!draftSettings) {
       return;
@@ -2447,6 +2466,9 @@ export default function App() {
         <div className="sidebar-footer">
           <button onClick={commitGlobal} disabled={!globalDirty || loading}>
             {globalDirty ? 'Commit Global Changes' : 'No Global Changes'}
+          </button>
+          <button onClick={rollbackGlobal} disabled={loading}>
+            Rollback Last Global
           </button>
           <p>Compiles impacted resumes and records Git history.</p>
         </div>

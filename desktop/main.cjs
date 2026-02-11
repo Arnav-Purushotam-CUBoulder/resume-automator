@@ -31,6 +31,14 @@ function getBackendEntry() {
   return path.join(getAppRoot(), 'backend', 'dist', 'index.js');
 }
 
+function isAllowedMainUrl(url, expectedUrl) {
+  return (
+    url === expectedUrl ||
+    url.startsWith(`${expectedUrl}#`) ||
+    url.startsWith(`${expectedUrl}?`)
+  );
+}
+
 async function startBackendServer() {
   const backendEntry = getBackendEntry();
   if (!fs.existsSync(backendEntry)) {
@@ -72,6 +80,15 @@ function createMainWindow() {
 
   const devUrl = process.env.ELECTRON_START_URL;
   if (devUrl) {
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith(devUrl)) {
+        return;
+      }
+      event.preventDefault();
+      shell.openExternal(url).catch(() => {
+        // Ignore external open failures.
+      });
+    });
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
@@ -81,7 +98,31 @@ function createMainWindow() {
         `Frontend build output not found at ${frontendIndex}. Run \"npm run build\" first.`,
       );
     }
-    mainWindow.loadFile(frontendIndex);
+    const frontendUrl = pathToFileURL(frontendIndex).toString();
+
+    // Keep the top-level window pinned to the packaged SPA entrypoint.
+    // This prevents occasional navigation into raw asset files (for example, CSS text).
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      if (isAllowedMainUrl(url, frontendUrl)) {
+        return;
+      }
+      event.preventDefault();
+      mainWindow.loadURL(frontendUrl).catch(() => {
+        // Ignore reload failures here; did-fail-load will surface startup errors.
+      });
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+      const current = mainWindow?.webContents.getURL() ?? '';
+      if (isAllowedMainUrl(current, frontendUrl)) {
+        return;
+      }
+      mainWindow?.loadURL(frontendUrl).catch(() => {
+        // Ignore reload failures here; app startup path will surface hard failures.
+      });
+    });
+
+    mainWindow.loadURL(frontendUrl);
   }
 }
 

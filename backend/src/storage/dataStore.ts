@@ -24,6 +24,22 @@ function resumePath(id: string): string {
   return path.join(RESUMES_DIR, `${id}.json`);
 }
 
+function normalizeExportPdfDir(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const hasSingleQuotes = trimmed.startsWith('\'') && trimmed.endsWith('\'');
+  const hasDoubleQuotes = trimmed.startsWith('"') && trimmed.endsWith('"');
+  if (hasSingleQuotes || hasDoubleQuotes) {
+    const unquoted = trimmed.slice(1, -1).trim();
+    return unquoted || undefined;
+  }
+
+  return trimmed;
+}
+
 async function readJson<T>(filePath: string): Promise<T> {
   const raw = await fsp.readFile(filePath, 'utf8');
   return JSON.parse(raw) as T;
@@ -114,11 +130,24 @@ export async function loadSettings(): Promise<AppSettings> {
     await writeJson(SETTINGS_FILE, fallback);
     return fallback;
   }
-  return readJson<AppSettings>(SETTINGS_FILE);
+  const settings = await readJson<AppSettings>(SETTINGS_FILE);
+  const normalized: AppSettings = {
+    ...settings,
+    exportPdfDir: normalizeExportPdfDir(settings.exportPdfDir),
+  };
+
+  if (JSON.stringify(settings) !== JSON.stringify(normalized)) {
+    await writeJson(SETTINGS_FILE, normalized);
+  }
+  return normalized;
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
-  await writeJson(SETTINGS_FILE, settings);
+  const normalized: AppSettings = {
+    ...settings,
+    exportPdfDir: normalizeExportPdfDir(settings.exportPdfDir),
+  };
+  await writeJson(SETTINGS_FILE, normalized);
 }
 
 export async function loadExportManifest(): Promise<Record<string, string>> {

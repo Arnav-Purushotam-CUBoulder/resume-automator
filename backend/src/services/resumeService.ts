@@ -167,6 +167,48 @@ function variantKey(templateId: string, email: string, location: string): string
   return `${templateId}::${email}::${location}`;
 }
 
+function sanitizeFileName(input: string): string {
+  const cleaned = input
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) {
+    return 'resume';
+  }
+  if (cleaned.length <= 140) {
+    return cleaned;
+  }
+  return cleaned.slice(0, 140).trim();
+}
+
+function toPosixRelativePath(input: string): string {
+  return input.replace(/\\/g, '/');
+}
+
+function getExportPathCandidatesForResume(resume: ResumeDocument): string[] {
+  const sanitizedName = sanitizeFileName(resume.name);
+  const nested = toPosixRelativePath(path.join(
+    sanitizeFileName(resume.variantEmail || 'default-email'),
+    sanitizeFileName(resume.variantLocation || 'default-location'),
+    `${sanitizedName}__${resume.id}.pdf`,
+  ));
+  const flatWithId = `${sanitizedName}__${resume.id}.pdf`;
+  const legacySanitizedFlat = `${sanitizedName}.pdf`;
+  const legacyRawFlat = `${resume.name.trim()}.pdf`;
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const candidate of [nested, flatWithId, legacySanitizedFlat, legacyRawFlat]) {
+    if (!candidate || seen.has(candidate)) {
+      continue;
+    }
+    seen.add(candidate);
+    out.push(candidate);
+  }
+  return out;
+}
+
 function normalizePointText(text?: string): string {
   return (text ?? '').replace(/\s+/g, ' ').trim();
 }
@@ -552,34 +594,52 @@ async function reconcileDeletedResumesFromExportFolder(
   }
 
   const manifest = await loadExportManifest();
-  const manifestIds = Object.keys(manifest);
-  if (!manifestIds.length) {
-    return { resumes: resumesInput };
-  }
-
   const byId = new Map(resumesInput.map((resume) => [resume.id, resume] as const));
-  const staleManifestIds: string[] = [];
   const missingExportIds: string[] = [];
+  const claimedPaths = new Set<string>();
+  let manifestChanged = false;
 
-  for (const resumeId of manifestIds) {
-    const resume = byId.get(resumeId);
-    if (!resume) {
-      staleManifestIds.push(resumeId);
+  for (const resume of resumesInput) {
+    const candidates = [
+      ...(manifest[resume.id] ? [manifest[resume.id]] : []),
+      ...getExportPathCandidatesForResume(resume),
+    ];
+
+    let matchedPath: string | undefined;
+    for (const relativePath of candidates) {
+      if (claimedPaths.has(relativePath)) {
+        continue;
+      }
+      const absolutePath = path.join(exportRoot, relativePath);
+      if (!fs.existsSync(absolutePath)) {
+        continue;
+      }
+      matchedPath = relativePath;
+      break;
+    }
+
+    if (!matchedPath) {
+      missingExportIds.push(resume.id);
       continue;
     }
-    const relativePath = manifest[resumeId];
-    const absolutePath = path.join(exportRoot, relativePath);
-    if (!fs.existsSync(absolutePath)) {
-      missingExportIds.push(resumeId);
+
+    claimedPaths.add(matchedPath);
+    if (manifest[resume.id] !== matchedPath) {
+      manifest[resume.id] = matchedPath;
+      manifestChanged = true;
     }
   }
 
-  for (const staleId of staleManifestIds) {
-    delete manifest[staleId];
+  for (const resumeId of Object.keys(manifest)) {
+    if (byId.has(resumeId)) {
+      continue;
+    }
+    delete manifest[resumeId];
+    manifestChanged = true;
   }
 
   if (!missingExportIds.length) {
-    if (staleManifestIds.length) {
+    if (manifestChanged) {
       await saveExportManifest(manifest);
     }
     return { resumes: resumesInput };
@@ -597,7 +657,9 @@ async function reconcileDeletedResumesFromExportFolder(
     templateIdsToDelete.has(resume.templateId || resume.id),
   );
   const deletedIds = await removeResumesAndArtifacts(familyResumes, settings, manifest);
-  await saveExportManifest(manifest);
+  if (deletedIds.size > 0 || manifestChanged) {
+    await saveExportManifest(manifest);
+  }
 
   if (deletedIds.size > 0) {
     await recordCommitEvent(

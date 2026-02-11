@@ -78,6 +78,8 @@ def normalize_line(line: str) -> str:
     line = line.replace("W eb", "Web")
     line = line.replace("T ools", "Tools")
     line = line.replace("A gentic", "Agentic")
+    line = line.replace("CU-BioF rontiers", "CU-BioFrontiers")
+    line = line.replace("BioF rontiers", "BioFrontiers")
 
     return line
 

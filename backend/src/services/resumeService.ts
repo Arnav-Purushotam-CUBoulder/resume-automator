@@ -144,6 +144,8 @@ const pointSpacingArtifactFixes: Array<[RegExp, string]> = [
   [/\baReact\b/g, 'a React'],
   [/\baCU\b/g, 'a CU'],
   [/\baserverless\b/gi, 'a serverless'],
+  [/\bCU-BioF\s+rontiers\b/g, 'CU-BioFrontiers'],
+  [/\bBioF\s+rontiers\b/g, 'BioFrontiers'],
   [/\b(\d+)\s*xand\b/gi, '$1x and'],
   [/\b(\d+)xand\b/gi, '$1x and'],
 ];
@@ -191,6 +193,12 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
     ...global,
     header: {
       ...global.header,
+      name: normalizePointText(global.header.name),
+      phone: normalizePointText(global.header.phone),
+      linkedinUrl: global.header.linkedinUrl?.trim() || '',
+      linkedinLabel: normalizePointText(global.header.linkedinLabel),
+      githubUrl: global.header.githubUrl?.trim() || '',
+      githubLabel: normalizePointText(global.header.githubLabel),
       email: fallbackEmail,
       portfolioUrl: fallbackPortfolioUrl,
       portfolioLabel: fallbackPortfolioLabel,
@@ -201,6 +209,40 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
       locations: locations.length ? locations : [fallbackLocation],
     },
     points: normalizedPoints,
+    sections: {
+      education: (global.sections.education ?? []).map((entry) => ({
+        ...entry,
+        institution: normalizePointText(entry.institution),
+        rightMeta: normalizePointText(entry.rightMeta),
+        degree: normalizePointText(entry.degree),
+        detail: normalizePointText(entry.detail),
+      })),
+      skills: (global.sections.skills ?? []).map((entry) => ({
+        ...entry,
+        label: normalizePointText(entry.label),
+        value: normalizePointText(entry.value),
+      })),
+      openSource: (global.sections.openSource ?? []).map((entry) => ({
+        ...entry,
+        title: normalizePointText(entry.title),
+        dateRange: normalizePointText(entry.dateRange),
+        role: normalizePointText(entry.role),
+        link: (entry.link ?? '').trim(),
+      })),
+      projects: (global.sections.projects ?? []).map((entry) => ({
+        ...entry,
+        title: normalizePointText(entry.title),
+        dateRange: normalizePointText(entry.dateRange),
+        link: (entry.link ?? '').trim(),
+      })),
+      experience: (global.sections.experience ?? []).map((entry) => ({
+        ...entry,
+        company: normalizePointText(entry.company),
+        dateRange: normalizePointText(entry.dateRange),
+        role: normalizePointText(entry.role),
+        location: normalizePointText(entry.location),
+      })),
+    },
     spacing: {
       headerToFirstSectionPt: clampSpacingValue(
         spacing.headerToFirstSectionPt,
@@ -235,8 +277,16 @@ function normalizeLocalHeader(
   }
   return {
     ...localHeader,
+    name: normalizePointText(localHeader.name),
+    phone: normalizePointText(localHeader.phone),
+    email: localHeader.email?.trim() || globalHeader.email,
+    linkedinUrl: localHeader.linkedinUrl?.trim() || globalHeader.linkedinUrl,
+    linkedinLabel: normalizePointText(localHeader.linkedinLabel) || globalHeader.linkedinLabel,
+    githubUrl: localHeader.githubUrl?.trim() || globalHeader.githubUrl,
+    githubLabel: normalizePointText(localHeader.githubLabel) || globalHeader.githubLabel,
     portfolioUrl: localHeader.portfolioUrl?.trim() || globalHeader.portfolioUrl,
-    portfolioLabel: localHeader.portfolioLabel?.trim() || globalHeader.portfolioLabel,
+    portfolioLabel: normalizePointText(localHeader.portfolioLabel) || globalHeader.portfolioLabel,
+    location: normalizePointText(localHeader.location),
   };
 }
 
@@ -398,6 +448,73 @@ function normalizeResumeLocalPointTexts(resume: ResumeDocument): ResumeDocument 
     };
   }
 
+  const normalizedEducation = resume.local.education.map((entry) => {
+    const next = {
+      ...entry,
+      institution: normalizePointText(entry.institution),
+      rightMeta: normalizePointText(entry.rightMeta),
+      degree: normalizePointText(entry.degree),
+      detail: normalizePointText(entry.detail),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    return next;
+  });
+
+  const normalizedSkills = resume.local.skills.map((entry) => {
+    const next = {
+      ...entry,
+      label: normalizePointText(entry.label),
+      value: normalizePointText(entry.value),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    return next;
+  });
+
+  const normalizedOpenSource = resume.local.openSource.map((entry) => {
+    const next = {
+      ...entry,
+      title: normalizePointText(entry.title),
+      dateRange: normalizePointText(entry.dateRange),
+      role: normalizePointText(entry.role),
+      link: (entry.link ?? '').trim(),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    return next;
+  });
+
+  const normalizedProjects = resume.local.projects.map((entry) => {
+    const next = {
+      ...entry,
+      title: normalizePointText(entry.title),
+      dateRange: normalizePointText(entry.dateRange),
+      link: (entry.link ?? '').trim(),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    return next;
+  });
+
+  const normalizedExperience = resume.local.experience.map((entry) => {
+    const next = {
+      ...entry,
+      company: normalizePointText(entry.company),
+      dateRange: normalizePointText(entry.dateRange),
+      role: normalizePointText(entry.role),
+      location: normalizePointText(entry.location),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(entry)) {
+      changed = true;
+    }
+    return next;
+  });
+
   if (!changed) {
     return resume;
   }
@@ -407,6 +524,11 @@ function normalizeResumeLocalPointTexts(resume: ResumeDocument): ResumeDocument 
     local: {
       ...resume.local,
       points: normalizedLocalPoints,
+      education: normalizedEducation,
+      skills: normalizedSkills,
+      openSource: normalizedOpenSource,
+      projects: normalizedProjects,
+      experience: normalizedExperience,
     },
   };
 }

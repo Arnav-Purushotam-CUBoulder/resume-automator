@@ -1,6 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
-const { pathToFileURL } = require('node:url');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 
 const apiPort = Number(process.env.PORT || 4100);
@@ -37,6 +37,20 @@ function isAllowedMainUrl(url, expectedUrl) {
     url.startsWith(`${expectedUrl}#`) ||
     url.startsWith(`${expectedUrl}?`)
   );
+}
+
+function stripHashAndQuery(url) {
+  return url.split('#')[0].split('?')[0];
+}
+
+function isSameFileUrl(url, expectedFilePath) {
+  try {
+    const normalizedExpected = path.resolve(expectedFilePath);
+    const normalizedCurrent = path.resolve(fileURLToPath(stripHashAndQuery(url)));
+    return normalizedCurrent === normalizedExpected;
+  } catch {
+    return false;
+  }
 }
 
 async function startBackendServer() {
@@ -100,29 +114,34 @@ function createMainWindow() {
     }
     const frontendUrl = pathToFileURL(frontendIndex).toString();
 
-    // Keep the top-level window pinned to the packaged SPA entrypoint.
-    // This prevents occasional navigation into raw asset files (for example, CSS text).
+    // Keep top-level navigation anchored to the app shell file.
     mainWindow.webContents.on('will-navigate', (event, url) => {
-      if (isAllowedMainUrl(url, frontendUrl)) {
+      if (isAllowedMainUrl(url, frontendUrl) || isSameFileUrl(url, frontendIndex)) {
         return;
       }
       event.preventDefault();
-      mainWindow.loadURL(frontendUrl).catch(() => {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url).catch(() => {
+          // Ignore external open failures.
+        });
+        return;
+      }
+      mainWindow.loadFile(frontendIndex).catch(() => {
         // Ignore reload failures here; did-fail-load will surface startup errors.
       });
     });
 
     mainWindow.webContents.on('did-finish-load', () => {
       const current = mainWindow?.webContents.getURL() ?? '';
-      if (isAllowedMainUrl(current, frontendUrl)) {
+      if (isAllowedMainUrl(current, frontendUrl) || isSameFileUrl(current, frontendIndex)) {
         return;
       }
-      mainWindow?.loadURL(frontendUrl).catch(() => {
+      mainWindow?.loadFile(frontendIndex).catch(() => {
         // Ignore reload failures here; app startup path will surface hard failures.
       });
     });
 
-    mainWindow.loadURL(frontendUrl);
+    mainWindow.loadFile(frontendIndex);
   }
 }
 

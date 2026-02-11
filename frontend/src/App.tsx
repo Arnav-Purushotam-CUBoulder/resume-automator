@@ -255,7 +255,7 @@ function HeaderEditor({ global, onChange }: HeaderEditorProps) {
   return (
     <SectionPanel
       title="Header"
-      subtitle="Global name, phone, and social links. Email and location are managed in their own tabs."
+      subtitle="Global name, phone, and profile links. Email and location are managed in their own tabs."
     >
       <div className="field-grid two-col">
         <label>
@@ -298,6 +298,20 @@ function HeaderEditor({ global, onChange }: HeaderEditorProps) {
           <input
             value={header.githubLabel}
             onChange={(e) => setField('githubLabel', e.target.value)}
+          />
+        </label>
+        <label>
+          Portfolio URL
+          <input
+            value={header.portfolioUrl}
+            onChange={(e) => setField('portfolioUrl', e.target.value)}
+          />
+        </label>
+        <label>
+          Portfolio Label
+          <input
+            value={header.portfolioLabel}
+            onChange={(e) => setField('portfolioLabel', e.target.value)}
           />
         </label>
       </div>

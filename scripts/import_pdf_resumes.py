@@ -146,6 +146,8 @@ def parse_header(lines: list[str], first_section_index: int) -> dict[str, str]:
         "linkedinLabel": "LinkedIn",
         "githubUrl": "https://github.com/Arnav-Purushotam-CUBoulder",
         "githubLabel": "GitHub",
+        "portfolioUrl": "https://arnav-purushotam-cuboulder.github.io/Portfolio-website/",
+        "portfolioLabel": "Portfolio",
         "location": location,
     }
 

@@ -15,6 +15,8 @@ export interface HeaderInfo {
   linkedinLabel: string;
   githubUrl: string;
   githubLabel: string;
+  portfolioUrl: string;
+  portfolioLabel: string;
   location: string;
 }
 

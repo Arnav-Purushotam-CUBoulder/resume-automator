@@ -26,6 +26,8 @@ export function createSeedGlobal(now: string): GlobalCatalog {
       linkedinLabel: 'LinkedIn',
       githubUrl: 'https://github.com/Arnav-Purushotam-CUBoulder',
       githubLabel: 'GitHub',
+      portfolioUrl: 'https://arnav-purushotam-cuboulder.github.io/Portfolio-website/',
+      portfolioLabel: 'Portfolio',
       location: 'Boulder, CO, USA',
     },
     contactVariants: {

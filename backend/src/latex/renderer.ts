@@ -65,6 +65,9 @@ function renderPreamble(spacing: GlobalSpacing): string {
 
 function renderHeader(data: RenderedResumeData): string {
   const header = data.header;
+  const portfolioSegment = header.portfolioUrl?.trim()
+    ? String.raw`\href{${header.portfolioUrl}}{${header.portfolioLabel || 'Portfolio'}} \;|\;`
+    : '';
   return String.raw`
 \begin{center}
   {\fontsize{30pt}{36pt}\bfseries ${header.name}}\\
@@ -73,6 +76,7 @@ function renderHeader(data: RenderedResumeData): string {
   \faAt\ \href{mailto:${header.email}}{${header.email}} \;|\;
   \faLinkedinSquare\ \href{${header.linkedinUrl}}{${header.linkedinLabel}} \;|\;
   \faGithub\ \href{${header.githubUrl}}{${header.githubLabel}} \;|\;
+  ${portfolioSegment}
   \faMapMarker\ ${header.location}
 \end{center}`;
 }

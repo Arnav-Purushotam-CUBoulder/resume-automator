@@ -7,6 +7,7 @@ import {
   CommitEvent,
   GlobalCatalog,
   GlobalSpacing,
+  HeaderInfo,
   RenderedResumeData,
   ResumeDocument,
   ResumeSummary,
@@ -75,6 +76,8 @@ const defaultGlobalSpacing: GlobalSpacing = {
   topMarginIn: 0.5,
   bottomMarginIn: 0.5,
 };
+const defaultPortfolioUrl = 'https://arnav-purushotam-cuboulder.github.io/Portfolio-website/';
+const defaultPortfolioLabel = 'Portfolio';
 
 function clampSpacingValue(value: unknown, fallback: number): number {
   const numeric = typeof value === 'number' ? value : Number(value);
@@ -162,6 +165,8 @@ function uniqueNonEmpty(values: string[]): string[] {
 function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
   const fallbackEmail = global.header.email?.trim() || 'user@example.com';
   const fallbackLocation = global.header.location?.trim() || 'Unknown, USA';
+  const fallbackPortfolioUrl = global.header.portfolioUrl?.trim() || defaultPortfolioUrl;
+  const fallbackPortfolioLabel = global.header.portfolioLabel?.trim() || defaultPortfolioLabel;
   const spacing = global.spacing ?? defaultGlobalSpacing;
   const normalizedPoints = Object.fromEntries(
     Object.entries(global.points ?? {}).map(([pointId, point]) => [
@@ -187,6 +192,8 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
     header: {
       ...global.header,
       email: fallbackEmail,
+      portfolioUrl: fallbackPortfolioUrl,
+      portfolioLabel: fallbackPortfolioLabel,
       location: fallbackLocation,
     },
     contactVariants: {
@@ -219,6 +226,20 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
   };
 }
 
+function normalizeLocalHeader(
+  localHeader: HeaderInfo | undefined,
+  globalHeader: HeaderInfo,
+): HeaderInfo | undefined {
+  if (!localHeader) {
+    return undefined;
+  }
+  return {
+    ...localHeader,
+    portfolioUrl: localHeader.portfolioUrl?.trim() || globalHeader.portfolioUrl,
+    portfolioLabel: localHeader.portfolioLabel?.trim() || globalHeader.portfolioLabel,
+  };
+}
+
 function defaultEmail(global: GlobalCatalog): string {
   return global.contactVariants.emails[0] ?? global.header.email;
 }
@@ -236,6 +257,7 @@ function normalizeResumeVariantMetadata(
     templateId: resume.templateId || resume.id,
     variantEmail: (resume.variantEmail || '').trim() || defaultEmail(global),
     variantLocation: (resume.variantLocation || '').trim() || defaultLocation(global),
+    localHeader: normalizeLocalHeader(resume.localHeader, global.header),
   };
 }
 

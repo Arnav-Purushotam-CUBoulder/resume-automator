@@ -5,6 +5,7 @@ import {
   clearCustomLatex,
   compileResume,
   createResume,
+  deleteResume,
   getHistory,
   getHistorySnapshot,
   getResumeDetail,
@@ -33,12 +34,14 @@ import {
 } from './types/domain';
 import { deepClone } from './utils/clone';
 
-type TabKey = 'resumes' | 'header' | 'output' | SectionKey;
+type TabKey = 'resumes' | 'header' | 'emails' | 'locations' | 'output' | SectionKey;
 type StudioMode = 'blocks' | 'latex';
 
 const tabOrder: TabKey[] = [
   'resumes',
   'header',
+  'emails',
+  'locations',
   'output',
   'experience',
   'education',
@@ -49,7 +52,9 @@ const tabOrder: TabKey[] = [
 
 const tabLabels: Record<TabKey, string> = {
   resumes: 'Resumes',
-  header: 'Header & Location',
+  header: 'Header',
+  emails: 'Emails',
+  locations: 'Locations',
   output: 'PDF Sync',
   experience: 'Experience',
   education: 'Education',
@@ -237,8 +242,8 @@ function HeaderEditor({ global, onChange }: HeaderEditorProps) {
 
   return (
     <SectionPanel
-      title="Header & Location"
-      subtitle="Changes here update every resume still using the global header."
+      title="Header"
+      subtitle="Global name, phone, and social links. Email and location are managed in their own tabs."
     >
       <div className="field-grid two-col">
         <label>
@@ -253,20 +258,6 @@ function HeaderEditor({ global, onChange }: HeaderEditorProps) {
           <input
             value={header.phone}
             onChange={(e) => setField('phone', e.target.value)}
-          />
-        </label>
-        <label>
-          Email
-          <input
-            value={header.email}
-            onChange={(e) => setField('email', e.target.value)}
-          />
-        </label>
-        <label>
-          Location
-          <input
-            value={header.location}
-            onChange={(e) => setField('location', e.target.value)}
           />
         </label>
         <label>
@@ -297,6 +288,144 @@ function HeaderEditor({ global, onChange }: HeaderEditorProps) {
             onChange={(e) => setField('githubLabel', e.target.value)}
           />
         </label>
+      </div>
+    </SectionPanel>
+  );
+}
+
+interface EmailVariantsEditorProps {
+  global: GlobalCatalog;
+  onChange: (global: GlobalCatalog) => void;
+}
+
+function EmailVariantsEditor({ global, onChange }: EmailVariantsEditorProps) {
+  const [candidate, setCandidate] = useState('');
+  const emails = global.contactVariants.emails;
+
+  const addEmail = () => {
+    const value = candidate.trim();
+    if (!value || emails.includes(value)) {
+      return;
+    }
+    const next = deepClone(global);
+    next.contactVariants.emails.push(value);
+    onChange(next);
+    setCandidate('');
+  };
+
+  const removeEmail = (email: string) => {
+    const next = deepClone(global);
+    next.contactVariants.emails = next.contactVariants.emails.filter((item) => item !== email);
+    if (!next.contactVariants.emails.length) {
+      next.contactVariants.emails = [global.header.email];
+    }
+    onChange(next);
+  };
+
+  return (
+    <SectionPanel
+      title="Emails"
+      subtitle="Add or remove email variants. Committing global changes generates/compiles full resume sets."
+    >
+      <div className="stack">
+        {emails.map((email) => (
+          <div key={email} className="editor-card">
+            <div className="editor-card-header">
+              <strong>{email}</strong>
+              <button
+                className="danger"
+                onClick={() => removeEmail(email)}
+                disabled={emails.length <= 1}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="field-grid two-col">
+        <label>
+          New Email
+          <input
+            placeholder="name@example.com"
+            value={candidate}
+            onChange={(e) => setCandidate(e.target.value)}
+          />
+        </label>
+        <div className="row-actions" style={{ alignSelf: 'end' }}>
+          <button onClick={addEmail} disabled={!candidate.trim()}>
+            Add Email
+          </button>
+        </div>
+      </div>
+    </SectionPanel>
+  );
+}
+
+interface LocationVariantsEditorProps {
+  global: GlobalCatalog;
+  onChange: (global: GlobalCatalog) => void;
+}
+
+function LocationVariantsEditor({ global, onChange }: LocationVariantsEditorProps) {
+  const [candidate, setCandidate] = useState('');
+  const locations = global.contactVariants.locations;
+
+  const addLocation = () => {
+    const value = candidate.trim();
+    if (!value || locations.includes(value)) {
+      return;
+    }
+    const next = deepClone(global);
+    next.contactVariants.locations.push(value);
+    onChange(next);
+    setCandidate('');
+  };
+
+  const removeLocation = (location: string) => {
+    const next = deepClone(global);
+    next.contactVariants.locations = next.contactVariants.locations.filter((item) => item !== location);
+    if (!next.contactVariants.locations.length) {
+      next.contactVariants.locations = [global.header.location];
+    }
+    onChange(next);
+  };
+
+  return (
+    <SectionPanel
+      title="Locations"
+      subtitle="Add or remove location variants. Committing global changes generates/compiles full resume sets."
+    >
+      <div className="stack">
+        {locations.map((location) => (
+          <div key={location} className="editor-card">
+            <div className="editor-card-header">
+              <strong>{location}</strong>
+              <button
+                className="danger"
+                onClick={() => removeLocation(location)}
+                disabled={locations.length <= 1}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="field-grid two-col">
+        <label>
+          New Location
+          <input
+            placeholder="San Jose, CA, USA"
+            value={candidate}
+            onChange={(e) => setCandidate(e.target.value)}
+          />
+        </label>
+        <div className="row-actions" style={{ alignSelf: 'end' }}>
+          <button onClick={addLocation} disabled={!candidate.trim()}>
+            Add Location
+          </button>
+        </div>
       </div>
     </SectionPanel>
   );
@@ -337,7 +466,7 @@ function OutputSettingsEditor({
   return (
     <SectionPanel
       title="PDF Sync Folder"
-      subtitle="Set your iCloud folder path. After successful compile, changed resumes replace their PDF in this folder."
+      subtitle="Set your iCloud folder path. PDFs are exported as email/location/resume.pdf, and changed files are replaced automatically."
     >
       <div className="field-grid">
         <label>
@@ -362,7 +491,7 @@ function OutputSettingsEditor({
         </button>
       </div>
       <p className="muted-note">
-        Only changed resumes are replaced. Existing PDFs for unchanged resumes are left as-is.
+        Folder structure: email folder first, location folder inside it, then resume PDFs.
       </p>
     </SectionPanel>
   );
@@ -946,8 +1075,15 @@ function OpenSourceEditor({ global, onChange }: OpenSourceEditorProps) {
 interface ResumesTabProps {
   resumes: ResumeSummary[];
   selectedId?: string;
+  selectedEmail: string;
+  selectedLocation: string;
+  emails: string[];
+  locations: string[];
+  onSelectEmail: (email: string) => void;
+  onSelectLocation: (location: string) => void;
   onSelect: (id: string) => void;
   onCreate: (name: string, sourceResumeId?: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onCompileAll: () => Promise<void>;
   compilingAll: boolean;
 }
@@ -955,8 +1091,15 @@ interface ResumesTabProps {
 function ResumesTab({
   resumes,
   selectedId,
+  selectedEmail,
+  selectedLocation,
+  emails,
+  locations,
+  onSelectEmail,
+  onSelectLocation,
   onSelect,
   onCreate,
+  onDelete,
   onCompileAll,
   compilingAll,
 }: ResumesTabProps) {
@@ -964,11 +1107,20 @@ function ResumesTab({
   const [sourceResumeId, setSourceResumeId] = useState<string | undefined>(selectedId);
   const [creating, setCreating] = useState(false);
 
+  const visibleResumes = resumes.filter(
+    (resume) =>
+      resume.variantEmail === selectedEmail
+      && resume.variantLocation === selectedLocation,
+  );
+
   useEffect(() => {
-    if (!sourceResumeId && resumes[0]) {
-      setSourceResumeId(resumes[0].id);
+    if (!sourceResumeId && visibleResumes[0]) {
+      setSourceResumeId(visibleResumes[0].id);
     }
-  }, [resumes, sourceResumeId]);
+    if (sourceResumeId && !visibleResumes.some((resume) => resume.id === sourceResumeId)) {
+      setSourceResumeId(visibleResumes[0]?.id);
+    }
+  }, [visibleResumes, sourceResumeId]);
 
   const handleCreate = async () => {
     const trimmed = name.trim();
@@ -989,8 +1141,37 @@ function ResumesTab({
       title="Resumes"
       subtitle="Open any resume to edit blocks, inspect LaTeX, compile, and browse version history."
     >
+      <div className="field-grid two-col">
+        <label>
+          Email Variant
+          <select
+            value={selectedEmail || emails[0] || ''}
+            onChange={(e) => onSelectEmail(e.target.value)}
+          >
+            {emails.map((email) => (
+              <option key={email} value={email}>
+                {email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Location Variant
+          <select
+            value={selectedLocation || locations[0] || ''}
+            onChange={(e) => onSelectLocation(e.target.value)}
+          >
+            {locations.map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className="resume-grid">
-        {resumes.map((resume) => (
+        {visibleResumes.map((resume) => (
           <button
             key={resume.id}
             className={`resume-card ${resume.id === selectedId ? 'selected' : ''}`}
@@ -1008,6 +1189,15 @@ function ResumesTab({
               >
                 {resume.lastCompileStatus ?? 'not compiled'}
               </span>
+              <button
+                className="danger"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onDelete(resume.id);
+                }}
+              >
+                Delete
+              </button>
             </div>
             <h3 className="resume-name-full" title={resume.name}>
               {resume.name}
@@ -1017,6 +1207,9 @@ function ResumesTab({
           </button>
         ))}
       </div>
+      {!visibleResumes.length && (
+        <p className="muted-note">No resumes yet for this email/location combination.</p>
+      )}
 
       <div className="new-resume-form">
         <h3>Create New Resume</h3>
@@ -1040,7 +1233,7 @@ function ResumesTab({
               value={sourceResumeId}
               onChange={(e) => setSourceResumeId(e.target.value)}
             >
-              {resumes.map((resume) => (
+              {visibleResumes.map((resume) => (
                 <option key={resume.id} value={resume.id}>
                   {resume.name}
                 </option>
@@ -1048,7 +1241,7 @@ function ResumesTab({
             </select>
           </label>
         </div>
-        <button onClick={handleCreate} disabled={creating || !name.trim()}>
+        <button onClick={handleCreate} disabled={creating || !name.trim() || !sourceResumeId}>
           {creating ? 'Creating...' : 'Create Resume'}
         </button>
       </div>
@@ -2160,6 +2353,8 @@ export default function App() {
   const [draftSettings, setDraftSettings] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('resumes');
   const [selectedResumeId, setSelectedResumeId] = useState<string | undefined>();
+  const [selectedEmail, setSelectedEmail] = useState<string>('');
+  const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [detail, setDetail] = useState<ResumeDetailResponse | null>(null);
   const [history, setHistory] = useState<CommitEvent[]>([]);
   const [snapshot, setSnapshot] = useState<{
@@ -2177,6 +2372,7 @@ export default function App() {
     setState(sorted);
     setDraftGlobal((prev) => prev ?? deepClone(sorted.global));
     setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+    syncVariantSelectors(sorted.global);
 
     if (!selectedResumeId && sorted.resumes.length > 0) {
       setSelectedResumeId(sorted.resumes[0].id);
@@ -2214,6 +2410,32 @@ export default function App() {
       .finally(() => setLoading(false));
   }, [selectedResumeId]);
 
+  useEffect(() => {
+    if (!state) {
+      return;
+    }
+
+    const visible = state.resumes.filter(
+      (resume) =>
+        resume.variantEmail === selectedEmail
+        && resume.variantLocation === selectedLocation,
+    );
+
+    if (!visible.length) {
+      if (selectedResumeId) {
+        setSelectedResumeId(undefined);
+        setDetail(null);
+        setHistory([]);
+        setSnapshot(null);
+      }
+      return;
+    }
+
+    if (!selectedResumeId || !visible.some((resume) => resume.id === selectedResumeId)) {
+      setSelectedResumeId(visible[0].id);
+    }
+  }, [state, selectedEmail, selectedLocation, selectedResumeId]);
+
   const globalDirty = useMemo(() => {
     if (!state || !draftGlobal) {
       return false;
@@ -2227,6 +2449,15 @@ export default function App() {
     }
     return JSON.stringify(state.settings) !== JSON.stringify(draftSettings);
   }, [state, draftSettings]);
+
+  const syncVariantSelectors = (global: GlobalCatalog) => {
+    const emails = global.contactVariants.emails;
+    const locations = global.contactVariants.locations;
+    setSelectedEmail((prev) => (prev && emails.includes(prev) ? prev : (emails[0] ?? '')));
+    setSelectedLocation((prev) =>
+      prev && locations.includes(prev) ? prev : (locations[0] ?? ''),
+    );
+  };
 
   const withTask = async (task: () => Promise<void>) => {
     setLoading(true);
@@ -2255,6 +2486,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
 
       if (selectedResumeId) {
         await loadResumeContext(selectedResumeId);
@@ -2273,6 +2505,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
 
       if (selectedResumeId) {
         await loadResumeContext(selectedResumeId);
@@ -2305,10 +2538,46 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
       setSelectedResumeId(created.resume.id);
       setDetail(created);
       setActiveTab('resumes');
       setNotice(`Created ${name}`);
+    });
+  };
+
+  const handleDeleteResume = async (resumeId: string) => {
+    const target = state?.resumes.find((resume) => resume.id === resumeId);
+    if (!target) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete resume family "${target.name}" for all email/location variants? This cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await withTask(async () => {
+      const updated = await deleteResume(
+        resumeId,
+        `Delete resume family ${resumeId}`,
+      );
+      const sorted = { ...updated, resumes: sortByName(updated.resumes) };
+      setState(sorted);
+      setDraftGlobal(deepClone(sorted.global));
+      setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
+
+      if (selectedResumeId && selectedResumeId === resumeId) {
+        setSelectedResumeId(undefined);
+        setDetail(null);
+        setHistory([]);
+        setSnapshot(null);
+      }
+
+      setNotice('Deleted resume family.');
     });
   };
 
@@ -2325,6 +2594,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal((prev) => prev ?? deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
       setHistory(await getHistory(selectedResumeId));
       setSnapshot(null);
       setNotice('Resume block changes saved and compiled.');
@@ -2343,6 +2613,7 @@ export default function App() {
       const sorted = { ...latest, resumes: sortByName(latest.resumes) };
       setState(sorted);
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
       setNotice('Resume compilation finished.');
     });
   };
@@ -2356,6 +2627,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal((prev) => prev ?? deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
 
       if (selectedResumeId) {
         await loadResumeContext(selectedResumeId);
@@ -2387,6 +2659,7 @@ export default function App() {
       const sorted = { ...latest, resumes: sortByName(latest.resumes) };
       setState(sorted);
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      syncVariantSelectors(sorted.global);
       setHistory(await getHistory(selectedResumeId));
       setSnapshot(null);
       setNotice('Created resume-only point override.');
@@ -2497,11 +2770,18 @@ export default function App() {
               <ResumesTab
                 resumes={state.resumes}
                 selectedId={selectedResumeId}
+                selectedEmail={selectedEmail}
+                selectedLocation={selectedLocation}
+                emails={state.global.contactVariants.emails}
+                locations={state.global.contactVariants.locations}
+                onSelectEmail={setSelectedEmail}
+                onSelectLocation={setSelectedLocation}
                 onSelect={(id) => {
                   setSelectedResumeId(id);
                   setActiveTab('resumes');
                 }}
                 onCreate={handleCreateResume}
+                onDelete={handleDeleteResume}
                 onCompileAll={handleCompileAllResumes}
                 compilingAll={loading}
               />
@@ -2525,6 +2805,12 @@ export default function App() {
 
           {activeTab === 'header' && (
             <HeaderEditor global={draftGlobal} onChange={setDraftGlobal} />
+          )}
+          {activeTab === 'emails' && (
+            <EmailVariantsEditor global={draftGlobal} onChange={setDraftGlobal} />
+          )}
+          {activeTab === 'locations' && (
+            <LocationVariantsEditor global={draftGlobal} onChange={setDraftGlobal} />
           )}
           {activeTab === 'output' && (
             <OutputSettingsEditor

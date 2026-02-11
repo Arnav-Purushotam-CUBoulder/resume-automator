@@ -358,6 +358,11 @@ button.danger {
   align-items: center;
 }
 
+.resume-card-top .danger {
+  padding: 5px 8px;
+  font-size: 0.78rem;
+}
+
 .muted-note {
   margin: 0;
   color: var(--text-muted);

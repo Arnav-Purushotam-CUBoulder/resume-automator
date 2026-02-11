@@ -4,6 +4,7 @@ import {
   compileAllResumes,
   compileResumeById,
   createResume,
+  deleteResumeFamily,
   getAppSettings,
   getAppState,
   getBuildFilesContent,
@@ -94,6 +95,16 @@ export function createApiRouter(): Router {
 
     const detail = await createResume(name, sourceResumeId);
     res.status(201).json(detail);
+  });
+
+  router.delete('/resumes/:id', async (req, res) => {
+    const message = parseMessage(req.body?.message, `Delete resume family ${req.params.id}`);
+    const state = await deleteResumeFamily(req.params.id, message);
+    if (!state) {
+      res.status(404).json({ error: 'Resume not found.' });
+      return;
+    }
+    res.json(state);
   });
 
   router.put('/resumes/:id', async (req, res) => {

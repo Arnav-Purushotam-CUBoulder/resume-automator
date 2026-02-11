@@ -21,6 +21,10 @@ function sanitizeFileName(input: string): string {
   return cleaned.slice(0, 140).trim();
 }
 
+function toPosixRelativePath(input: string): string {
+  return input.replace(/\\/g, '/');
+}
+
 export async function syncPdfToExportDirectory(
   settings: AppSettings,
   resume: ResumeDocument,
@@ -36,23 +40,27 @@ export async function syncPdfToExportDirectory(
 
     const manifest = await loadExportManifest();
     const nextFileName = `${sanitizeFileName(resume.name)}__${resume.id}.pdf`;
-    const previousFileName = manifest[resume.id];
+    const emailFolder = sanitizeFileName(resume.variantEmail || 'default-email');
+    const locationFolder = sanitizeFileName(resume.variantLocation || 'default-location');
+    const nextRelativePath = toPosixRelativePath(path.join(emailFolder, locationFolder, nextFileName));
+    const previousRelativePath = manifest[resume.id];
 
-    if (previousFileName && previousFileName !== nextFileName) {
-      const previousPath = path.join(targetDir, previousFileName);
+    if (previousRelativePath && previousRelativePath !== nextRelativePath) {
+      const previousPath = path.join(targetDir, previousRelativePath);
       if (fs.existsSync(previousPath)) {
         await fsp.unlink(previousPath);
       }
     }
 
-    const targetPath = path.join(targetDir, nextFileName);
+    const targetPath = path.join(targetDir, nextRelativePath);
+    await fsp.mkdir(path.dirname(targetPath), { recursive: true });
     if (fs.existsSync(targetPath)) {
       await fsp.unlink(targetPath);
     }
 
     await fsp.copyFile(compiledPdfPath, targetPath);
 
-    manifest[resume.id] = nextFileName;
+    manifest[resume.id] = nextRelativePath;
     await saveExportManifest(manifest);
 
     return { exportedPath: targetPath };

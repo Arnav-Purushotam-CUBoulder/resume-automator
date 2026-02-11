@@ -158,6 +158,14 @@ export async function saveResumes(resumes: ResumeDocument[]): Promise<void> {
   await Promise.all(resumes.map((resume) => saveResume(resume)));
 }
 
+export async function deleteResume(id: string): Promise<void> {
+  const filePath = resumePath(id);
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+  await fsp.unlink(filePath);
+}
+
 export async function saveCommitEvent(event: CommitEvent): Promise<void> {
   await writeJson(path.join(EVENTS_DIR, `${event.id}.json`), event);
 }

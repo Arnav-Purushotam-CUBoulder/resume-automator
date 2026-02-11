@@ -63,6 +63,10 @@ export interface OpenSourceEntry {
 
 export interface GlobalCatalog {
   header: HeaderInfo;
+  contactVariants: {
+    emails: string[];
+    locations: string[];
+  };
   points: Record<string, Point>;
   sections: {
     education: EducationEntry[];
@@ -83,6 +87,9 @@ export interface SectionRef {
 
 export interface ResumeDocument {
   id: string;
+  templateId: string;
+  variantEmail: string;
+  variantLocation: string;
   name: string;
   sectionOrder: SectionKey[];
   sectionVisibility: Record<SectionKey, boolean>;
@@ -127,6 +134,9 @@ export interface RenderedResumeData {
 
 export interface ResumeSummary {
   id: string;
+  templateId: string;
+  variantEmail: string;
+  variantLocation: string;
   name: string;
   updatedAt: string;
   lastCompiledAt?: string;

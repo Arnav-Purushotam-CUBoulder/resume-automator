@@ -28,6 +28,10 @@ export function createSeedGlobal(now: string): GlobalCatalog {
       githubLabel: 'GitHub',
       location: 'Boulder, CO, USA',
     },
+    contactVariants: {
+      emails: ['arnavpsusa@gmail.com'],
+      locations: ['Boulder, CO, USA'],
+    },
     points: {
       pt_os_curl_32bit: {
         id: 'pt_os_curl_32bit',
@@ -181,6 +185,9 @@ export function createSeedResumes(now: string): ResumeDocument[] {
   return [
     {
       id: 'resume_master',
+      templateId: 'resume_master',
+      variantEmail: 'arnavpsusa@gmail.com',
+      variantLocation: 'Boulder, CO, USA',
       name: 'Master Resume',
       sectionOrder: order,
       sectionVisibility: {

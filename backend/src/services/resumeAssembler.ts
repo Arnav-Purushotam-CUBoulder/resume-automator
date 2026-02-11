@@ -167,6 +167,9 @@ function resolveExperience(
 export function toResumeSummary(resume: ResumeDocument): ResumeSummary {
   return {
     id: resume.id,
+    templateId: resume.templateId,
+    variantEmail: resume.variantEmail,
+    variantLocation: resume.variantLocation,
     name: resume.name,
     updatedAt: resume.updatedAt,
     lastCompiledAt: resume.lastCompiledAt,
@@ -178,9 +181,14 @@ export function buildRenderedResumeData(
   global: GlobalCatalog,
   resume: ResumeDocument,
 ): RenderedResumeData {
-  const header = resume.headerMode === 'local' && resume.localHeader
+  const baseHeader = resume.headerMode === 'local' && resume.localHeader
     ? resume.localHeader
     : global.header;
+  const header = {
+    ...baseHeader,
+    email: resume.variantEmail || baseHeader.email,
+    location: resume.variantLocation || baseHeader.location,
+  };
 
   const mergedPoints = {
     ...global.points,

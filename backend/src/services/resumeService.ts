@@ -13,13 +13,16 @@ import {
 } from '../domain/types.js';
 import { renderLatex } from '../latex/renderer.js';
 import {
+  deleteResume,
   getResumeFileRelativePath,
   initializeStorage,
   loadAllCommitEvents,
   loadAllResumes,
+  loadExportManifest,
   loadSettings,
   loadGlobal,
   loadResume,
+  saveExportManifest,
   saveSettings,
   saveCommitEvent,
   saveGlobal,
@@ -40,7 +43,7 @@ import {
   currentArtifactPaths,
 } from './compileService.js';
 import { syncPdfToExportDirectory } from './pdfExportService.js';
-import { BUILDS_DIR, HISTORY_CACHE_DIR, ensureDir } from '../utils/paths.js';
+import { BUILDS_DIR, HISTORY_CACHE_DIR, RESUMES_DIR, ensureDir } from '../utils/paths.js';
 
 const shortId = customAlphabet('1234567890abcdefghijklmnopqrstuvwxyz', 8);
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL ?? 'http://127.0.0.1:4100').replace(
@@ -86,17 +89,83 @@ function diffGlobalPoints(oldGlobal: GlobalCatalog, nextGlobal: GlobalCatalog): 
 function hasGlobalStructuralChange(oldGlobal: GlobalCatalog, nextGlobal: GlobalCatalog): boolean {
   const oldShape = {
     header: oldGlobal.header,
+    contactVariants: oldGlobal.contactVariants,
     sections: oldGlobal.sections,
   };
   const nextShape = {
     header: nextGlobal.header,
+    contactVariants: nextGlobal.contactVariants,
     sections: nextGlobal.sections,
   };
   return JSON.stringify(oldShape) !== JSON.stringify(nextShape);
 }
 
 const pointBearingSections = ['experience', 'projects', 'openSource'] as const;
-type PointBearingSection = (typeof pointBearingSections)[number];
+
+function uniqueNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
+  const fallbackEmail = global.header.email?.trim() || 'user@example.com';
+  const fallbackLocation = global.header.location?.trim() || 'Unknown, USA';
+
+  const emails = uniqueNonEmpty([
+    ...(global.contactVariants?.emails ?? []),
+    fallbackEmail,
+  ]);
+  const locations = uniqueNonEmpty([
+    ...(global.contactVariants?.locations ?? []),
+    fallbackLocation,
+  ]);
+
+  return {
+    ...global,
+    header: {
+      ...global.header,
+      email: fallbackEmail,
+      location: fallbackLocation,
+    },
+    contactVariants: {
+      emails: emails.length ? emails : [fallbackEmail],
+      locations: locations.length ? locations : [fallbackLocation],
+    },
+  };
+}
+
+function defaultEmail(global: GlobalCatalog): string {
+  return global.contactVariants.emails[0] ?? global.header.email;
+}
+
+function defaultLocation(global: GlobalCatalog): string {
+  return global.contactVariants.locations[0] ?? global.header.location;
+}
+
+function normalizeResumeVariantMetadata(
+  resume: ResumeDocument,
+  global: GlobalCatalog,
+): ResumeDocument {
+  return {
+    ...resume,
+    templateId: resume.templateId || resume.id,
+    variantEmail: (resume.variantEmail || '').trim() || defaultEmail(global),
+    variantLocation: (resume.variantLocation || '').trim() || defaultLocation(global),
+  };
+}
+
+function variantKey(templateId: string, email: string, location: string): string {
+  return `${templateId}::${email}::${location}`;
+}
 
 function normalizePointText(text?: string): string {
   return (text ?? '').replace(/\s+/g, ' ').trim();
@@ -403,6 +472,77 @@ function cloneResume(resume: ResumeDocument, newId: string, name: string): Resum
   } as ResumeDocument;
 }
 
+function ensureVariantResumeMatrix(
+  global: GlobalCatalog,
+  resumesInput: ResumeDocument[],
+  templateIds?: Set<string>,
+): { resumes: ResumeDocument[]; createdResumeIds: Set<string> } {
+  const resumes = [...resumesInput];
+  const createdResumeIds = new Set<string>();
+  const byVariant = new Map<string, ResumeDocument>();
+
+  for (const resume of resumes) {
+    byVariant.set(
+      variantKey(resume.templateId, resume.variantEmail, resume.variantLocation),
+      resume,
+    );
+  }
+
+  const templates = resumes.filter((resume) =>
+    resume.templateId === resume.id
+    && (!templateIds || templateIds.has(resume.templateId)),
+  );
+
+  for (const template of templates) {
+    for (const email of global.contactVariants.emails) {
+      for (const location of global.contactVariants.locations) {
+        const key = variantKey(template.id, email, location);
+        if (byVariant.has(key)) {
+          continue;
+        }
+        const cloneId = `resume_${shortId()}`;
+        const clone = cloneResume(template, cloneId, template.name);
+        clone.templateId = template.id;
+        clone.variantEmail = email;
+        clone.variantLocation = location;
+        resumes.push(clone);
+        byVariant.set(key, clone);
+        createdResumeIds.add(clone.id);
+      }
+    }
+  }
+
+  return { resumes, createdResumeIds };
+}
+
+async function normalizeStoredState(): Promise<{
+  global: GlobalCatalog;
+  resumes: ResumeDocument[];
+}> {
+  const [globalRaw, resumesRaw] = await Promise.all([loadGlobal(), loadAllResumes()]);
+  const normalizedGlobal = normalizeGlobalCatalog(globalRaw);
+
+  const normalizedResumes = resumesRaw.map((resume) =>
+    normalizeResumeVariantMetadata(resume, normalizedGlobal),
+  );
+  const ensured = ensureVariantResumeMatrix(normalizedGlobal, normalizedResumes);
+
+  const globalChanged = JSON.stringify(globalRaw) !== JSON.stringify(normalizedGlobal);
+  const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(ensured.resumes);
+
+  if (globalChanged) {
+    await saveGlobal(normalizedGlobal);
+  }
+  if (resumesChanged) {
+    await saveResumes(ensured.resumes);
+  }
+
+  return {
+    global: normalizedGlobal,
+    resumes: ensured.resumes,
+  };
+}
+
 export interface AppStateResponse {
   global: GlobalCatalog;
   resumes: ResumeSummary[];
@@ -422,17 +562,17 @@ export async function bootstrap(): Promise<void> {
   await initializeStorage();
   ensureDir(path.join(BUILDS_DIR));
   ensureDir(path.join(HISTORY_CACHE_DIR));
+  await normalizeStoredState();
 }
 
 export async function getAppState(): Promise<AppStateResponse> {
-  const [global, resumes, settings] = await Promise.all([
-    loadGlobal(),
-    loadAllResumes(),
+  const [normalized, settings] = await Promise.all([
+    normalizeStoredState(),
     loadSettings(),
   ]);
   return {
-    global,
-    resumes: summarize(resumes),
+    global: normalized.global,
+    resumes: summarize(normalized.resumes),
     settings,
   };
 }
@@ -461,12 +601,13 @@ export async function updateAppSettings(
 }
 
 export async function getResumeDetail(id: string): Promise<ResumeDetailResponse | null> {
-  const [global, resume] = await Promise.all([loadGlobal(), loadResume(id)]);
+  const normalized = await normalizeStoredState();
+  const resume = normalized.resumes.find((item) => item.id === id);
   if (!resume) {
     return null;
   }
 
-  const rendered = buildRenderedResumeData(global, resume);
+  const rendered = buildRenderedResumeData(normalized.global, resume);
   const latex = resume.customLatex ?? renderLatex(rendered);
   const current = currentArtifactPaths(resume.id);
 
@@ -484,12 +625,13 @@ export async function compileResumeById(
   resumeId: string,
   message = `Compile resume ${resumeId}`,
 ): Promise<ResumeDetailResponse | null> {
-  const [global, resume] = await Promise.all([loadGlobal(), loadResume(resumeId)]);
+  const normalized = await normalizeStoredState();
+  const resume = normalized.resumes.find((item) => item.id === resumeId);
   if (!resume) {
     return null;
   }
 
-  const [updated] = await compileAndUpdateResumes(global, [resume]);
+  const [updated] = await compileAndUpdateResumes(normalized.global, [resume]);
   await recordCommitEvent(message, [resumeId]);
   return getResumeDetail(updated.id);
 }
@@ -497,7 +639,8 @@ export async function compileResumeById(
 export async function compileAllResumes(
   message = 'Compile all resumes',
 ): Promise<AppStateResponse> {
-  const [global, resumes] = await Promise.all([loadGlobal(), loadAllResumes()]);
+  const normalized = await normalizeStoredState();
+  const { global, resumes } = normalized;
   if (resumes.length > 0) {
     await compileAndUpdateResumes(global, resumes);
   }
@@ -515,22 +658,29 @@ export async function updateGlobalCatalog(
   nextGlobal: GlobalCatalog,
   message = 'Update global resume sections',
 ): Promise<AppStateResponse> {
-  const [oldGlobal, resumes] = await Promise.all([loadGlobal(), loadAllResumes()]);
-
-  const changedPointIds = diffGlobalPoints(oldGlobal, nextGlobal);
-  const structuralChange = hasGlobalStructuralChange(oldGlobal, nextGlobal);
+  const normalizedState = await normalizeStoredState();
+  const oldGlobal = normalizedState.global;
+  const resumes = normalizedState.resumes;
 
   const now = nowIso();
+  const normalizedNextGlobal = normalizeGlobalCatalog(nextGlobal);
+  const changedPointIds = diffGlobalPoints(oldGlobal, normalizedNextGlobal);
+  const structuralChange = hasGlobalStructuralChange(oldGlobal, normalizedNextGlobal);
+
   const baseGlobal: GlobalCatalog = {
-    ...nextGlobal,
+    ...normalizedNextGlobal,
     updatedAt: now,
   };
 
   const relinked = relinkAllResumesToGlobalPoints(baseGlobal, resumes, now);
+  const matrix = ensureVariantResumeMatrix(relinked.global, relinked.resumes);
   const normalizedGlobal = relinked.global;
-  const resumesAfterRelink = relinked.resumes;
+  const resumesAfterRelink = matrix.resumes;
 
   const affectedIds = new Set<string>(relinked.changedResumeIds);
+  for (const createdId of matrix.createdResumeIds) {
+    affectedIds.add(createdId);
+  }
   if (structuralChange || changedPointIds.length === 0) {
     for (const resume of resumesAfterRelink) {
       affectedIds.add(resume.id);
@@ -554,9 +704,7 @@ export async function updateGlobalCatalog(
     await compileAndUpdateResumes(normalizedGlobal, affected);
   }
 
-  const commitResumes = resumesAfterRelink
-    .filter((resume) => relinked.changedResumeIds.has(resume.id) || affectedIds.has(resume.id))
-    .map((resume) => resume.id);
+  const commitResumes = [...affectedIds];
   await recordCommitEvent(message, commitResumes);
 
   const latestResumes = await loadAllResumes();
@@ -590,7 +738,9 @@ export async function updateResumeDocument(
   nextResume: ResumeDocument,
   message = `Update resume ${resumeId}`,
 ): Promise<ResumeDetailResponse | null> {
-  const [global, existing] = await Promise.all([loadGlobal(), loadResume(resumeId)]);
+  const normalized = await normalizeStoredState();
+  const global = normalized.global;
+  const existing = normalized.resumes.find((resume) => resume.id === resumeId);
   if (!existing) {
     return null;
   }
@@ -599,6 +749,9 @@ export async function updateResumeDocument(
   const updatedResume: ResumeDocument = {
     ...nextResume,
     id: resumeId,
+    templateId: existing.templateId,
+    variantEmail: existing.variantEmail,
+    variantLocation: existing.variantLocation,
     createdAt: existing.createdAt,
     updatedAt: now,
   };
@@ -650,7 +803,9 @@ export async function createResume(
   name: string,
   sourceResumeId?: string,
 ): Promise<ResumeDetailResponse> {
-  const resumes = await loadAllResumes();
+  const normalized = await normalizeStoredState();
+  const global = normalized.global;
+  const resumes = normalized.resumes;
   let base = resumes[0];
 
   if (sourceResumeId) {
@@ -664,19 +819,75 @@ export async function createResume(
     throw new Error('No source resume available to clone.');
   }
 
-  const newId = `resume_${shortId()}`;
-  const newResume = cloneResume(base, newId, name);
-  await saveResume(newResume);
+  const templateId = `resume_${shortId()}`;
+  const templateResume = cloneResume(base, templateId, name);
+  templateResume.templateId = templateId;
+  templateResume.variantEmail = base.variantEmail || defaultEmail(global);
+  templateResume.variantLocation = base.variantLocation || defaultLocation(global);
 
-  const global = await loadGlobal();
-  await compileAndUpdateResumes(global, [newResume]);
-  await recordCommitEvent(`Create resume ${name}`, [newId]);
+  const withTemplate = [...resumes, templateResume];
+  const matrix = ensureVariantResumeMatrix(global, withTemplate, new Set([templateId]));
+  const createdFamily = matrix.resumes.filter((resume) => resume.templateId === templateId);
+  await saveResumes(createdFamily);
+  await compileAndUpdateResumes(global, createdFamily);
+  await recordCommitEvent(`Create resume ${name}`, createdFamily.map((resume) => resume.id));
 
-  const detail = await getResumeDetail(newId);
+  const preferredResume = createdFamily.find(
+    (resume) =>
+      resume.variantEmail === templateResume.variantEmail
+      && resume.variantLocation === templateResume.variantLocation,
+  ) ?? templateResume;
+
+  const detail = await getResumeDetail(preferredResume.id);
   if (!detail) {
     throw new Error('Created resume but failed to load details.');
   }
   return detail;
+}
+
+export async function deleteResumeFamily(
+  resumeId: string,
+  message = `Delete resume family for ${resumeId}`,
+): Promise<AppStateResponse | null> {
+  const normalized = await normalizeStoredState();
+  const target = normalized.resumes.find((resume) => resume.id === resumeId);
+  if (!target) {
+    return null;
+  }
+
+  const templateId = target.templateId || target.id;
+  const family = normalized.resumes.filter((resume) => resume.templateId === templateId);
+  if (!family.length) {
+    return null;
+  }
+
+  const settings = await loadSettings();
+  const manifest = await loadExportManifest();
+
+  for (const resume of family) {
+    await deleteResume(resume.id);
+    await fsp.rm(path.join(BUILDS_DIR, resume.id), { recursive: true, force: true });
+    await fsp.rm(path.join(HISTORY_CACHE_DIR, resume.id), { recursive: true, force: true });
+
+    const relativeExportPath = manifest[resume.id];
+    if (relativeExportPath && settings.exportPdfDir?.trim()) {
+      const absoluteExportPath = path.join(settings.exportPdfDir.trim(), relativeExportPath);
+      if (fs.existsSync(absoluteExportPath)) {
+        await fsp.unlink(absoluteExportPath);
+      }
+    }
+    delete manifest[resume.id];
+  }
+
+  await saveExportManifest(manifest);
+  await recordCommitEvent(message, family.map((resume) => resume.id));
+
+  const latestResumes = await loadAllResumes();
+  return {
+    global: normalized.global,
+    resumes: summarize(latestResumes),
+    settings,
+  };
 }
 
 export interface OverridePointInput {
@@ -695,7 +906,8 @@ export async function overridePointForResume(
     throw new Error('Point overrides are only supported for experience/projects/openSource.');
   }
 
-  const resume = await loadResume(input.resumeId);
+  const normalized = await normalizeStoredState();
+  const resume = normalized.resumes.find((item) => item.id === input.resumeId);
   if (!resume) {
     return null;
   }

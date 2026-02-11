@@ -101,6 +101,16 @@ export function createResume(
   });
 }
 
+export function deleteResume(
+  id: string,
+  message: string,
+): Promise<AppStateResponse> {
+  return request<AppStateResponse>(`/api/resumes/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ message }),
+  });
+}
+
 export function overridePoint(
   resumeId: string,
   payload: { section: string; refId: string; pointId: string; text: string },

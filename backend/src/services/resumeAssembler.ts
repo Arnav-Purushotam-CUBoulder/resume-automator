@@ -230,6 +230,29 @@ function refHasPoint(
   }
 }
 
+function refHasPointInLocalEntry(
+  resume: ResumeDocument,
+  section: SectionKey,
+  localId: string | undefined,
+  includePointIds: string[] | undefined,
+  pointId: string,
+): boolean {
+  if (!localId || (section !== 'experience' && section !== 'projects' && section !== 'openSource')) {
+    return false;
+  }
+
+  const localEntry = resume.local[section].find((item) => item.id === localId);
+  if (!localEntry) {
+    return false;
+  }
+
+  const pointIds = includePointIds?.length
+    ? localEntry.pointIds.filter((id) => includePointIds.includes(id))
+    : localEntry.pointIds;
+
+  return pointIds.includes(pointId);
+}
+
 export function resumesReferencingGlobalPoint(
   resumes: ResumeDocument[],
   global: GlobalCatalog,
@@ -242,7 +265,16 @@ export function resumesReferencingGlobalPoint(
         if (ref.pointOverrides && ref.pointOverrides[pointId]) {
           return false;
         }
-        return refHasPoint(ref.globalId, section, pointId, global);
+        return (
+          refHasPoint(ref.globalId, section, pointId, global)
+          || refHasPointInLocalEntry(
+            resume,
+            section,
+            ref.localId,
+            ref.includePointIds,
+            pointId,
+          )
+        );
       }),
     );
   });

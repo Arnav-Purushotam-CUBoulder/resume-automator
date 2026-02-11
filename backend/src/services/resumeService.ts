@@ -102,37 +102,59 @@ function normalizePointText(text?: string): string {
   return (text ?? '').replace(/\s+/g, ' ').trim();
 }
 
-function buildRelinkTextIndex(
-  oldGlobal: GlobalCatalog,
-  nextGlobal: GlobalCatalog,
-  changedPointIds: string[],
-): Map<string, string> {
-  const oldTextCounts = new Map<string, number>();
+function stripLatexForMatching(text: string): string {
+  return text
+    .replace(/\\href\{([^}]*)\}\{([^}]*)\}/g, '$2')
+    .replace(/\\textbf\{([^}]*)\}/g, '$1')
+    .replace(/\\textit\{([^}]*)\}/g, '$1')
+    .replace(/\\texttt\{([^}]*)\}/g, '$1')
+    .replace(/\\emph\{([^}]*)\}/g, '$1')
+    .replace(/\\textbar\\\s*/g, '| ')
+    .replace(/\\textasciitilde\{\}/g, '~')
+    .replace(/\\textasciicircum\{\}/g, '^')
+    .replace(/\\#/g, '#')
+    .replace(/\\%/g, '%')
+    .replace(/\\&/g, '&')
+    .replace(/\\_/g, '_')
+    .replace(/\\\{/g, '{')
+    .replace(/\\\}/g, '}')
+    .replace(/\$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  for (const pointId of changedPointIds) {
-    const oldText = normalizePointText(oldGlobal.points[pointId]?.text);
-    const nextText = normalizePointText(nextGlobal.points[pointId]?.text);
-    if (!oldText || !nextText || oldText === nextText) {
-      continue;
-    }
-    oldTextCounts.set(oldText, (oldTextCounts.get(oldText) ?? 0) + 1);
+function buildPointMatchKey(text?: string): string {
+  const normalized = stripLatexForMatching(normalizePointText(text));
+  if (!normalized) {
+    return '';
   }
+  return normalized
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
 
+function buildGlobalPointMatchIndex(global: GlobalCatalog): Map<string, string> {
   const index = new Map<string, string>();
-  for (const pointId of changedPointIds) {
-    const oldText = normalizePointText(oldGlobal.points[pointId]?.text);
-    const nextText = normalizePointText(nextGlobal.points[pointId]?.text);
-    if (!oldText || !nextText || oldText === nextText) {
+  const pointIds = Object.keys(global.points).sort();
+
+  for (const pointId of pointIds) {
+    const key = buildPointMatchKey(global.points[pointId]?.text);
+    if (!key || index.has(key)) {
       continue;
     }
-    // Ambiguous source text (same old text mapped to multiple global points) is skipped.
-    if ((oldTextCounts.get(oldText) ?? 0) !== 1) {
-      continue;
-    }
-    index.set(oldText, pointId);
+    index.set(key, pointId);
   }
 
   return index;
+}
+
+function createGlobalPointId(global: GlobalCatalog): string {
+  let pointId = `pt_auto_${shortId()}`;
+  while (global.points[pointId]) {
+    pointId = `pt_auto_${shortId()}`;
+  }
+  return pointId;
 }
 
 function collectUsedLocalPointIds(resume: ResumeDocument): Set<string> {
@@ -161,20 +183,22 @@ function collectUsedLocalPointIds(resume: ResumeDocument): Set<string> {
           used.add(pointId);
         }
       }
+      for (const localPointId of Object.values(ref.pointOverrides ?? {})) {
+        if (resume.local.points[localPointId]) {
+          used.add(localPointId);
+        }
+      }
     }
   }
 
   return used;
 }
 
-function relinkLocalPointsToGlobalByText(
+function relinkResumeLocalPointsToGlobal(
+  global: GlobalCatalog,
+  pointMatchIndex: Map<string, string>,
   resume: ResumeDocument,
-  relinkTextIndex: Map<string, string>,
 ): { resume: ResumeDocument; changed: boolean } {
-  if (relinkTextIndex.size === 0) {
-    return { resume, changed: false };
-  }
-
   const next = JSON.parse(JSON.stringify(resume)) as ResumeDocument;
   let changed = false;
 
@@ -186,10 +210,22 @@ function relinkLocalPointsToGlobalByText(
       let mappedPointId = pointId;
       const localPoint = next.local.points[pointId];
       if (localPoint) {
-        const targetGlobalPointId = relinkTextIndex.get(normalizePointText(localPoint.text));
-        if (targetGlobalPointId && targetGlobalPointId !== pointId) {
-          mappedPointId = targetGlobalPointId;
-          changed = true;
+        const pointKey = buildPointMatchKey(localPoint.text);
+        if (pointKey) {
+          let targetGlobalPointId = pointMatchIndex.get(pointKey);
+          if (!targetGlobalPointId) {
+            targetGlobalPointId = createGlobalPointId(global);
+            global.points[targetGlobalPointId] = {
+              id: targetGlobalPointId,
+              text: localPoint.text,
+            };
+            pointMatchIndex.set(pointKey, targetGlobalPointId);
+          }
+
+          if (targetGlobalPointId !== pointId) {
+            mappedPointId = targetGlobalPointId;
+            changed = true;
+          }
         }
       }
 
@@ -243,6 +279,38 @@ function relinkLocalPointsToGlobalByText(
   }
 
   return { resume: next, changed };
+}
+
+function relinkAllResumesToGlobalPoints(
+  globalInput: GlobalCatalog,
+  resumesInput: ResumeDocument[],
+  now: string,
+): {
+  global: GlobalCatalog;
+  resumes: ResumeDocument[];
+  changedResumeIds: Set<string>;
+} {
+  const global = JSON.parse(JSON.stringify(globalInput)) as GlobalCatalog;
+  const pointMatchIndex = buildGlobalPointMatchIndex(global);
+  const changedResumeIds = new Set<string>();
+
+  const resumes = resumesInput.map((resume) => {
+    const relinked = relinkResumeLocalPointsToGlobal(
+      global,
+      pointMatchIndex,
+      resume,
+    );
+    if (!relinked.changed) {
+      return resume;
+    }
+    changedResumeIds.add(relinked.resume.id);
+    return {
+      ...relinked.resume,
+      updatedAt: now,
+    };
+  });
+
+  return { global, resumes, changedResumeIds };
 }
 
 async function compileAndUpdateResumes(
@@ -453,49 +521,43 @@ export async function updateGlobalCatalog(
   const structuralChange = hasGlobalStructuralChange(oldGlobal, nextGlobal);
 
   const now = nowIso();
-  const normalizedGlobal: GlobalCatalog = {
+  const baseGlobal: GlobalCatalog = {
     ...nextGlobal,
     updatedAt: now,
   };
 
-  await saveGlobal(normalizedGlobal);
+  const relinked = relinkAllResumesToGlobalPoints(baseGlobal, resumes, now);
+  const normalizedGlobal = relinked.global;
+  const resumesAfterRelink = relinked.resumes;
 
-  const relinkTextIndex = buildRelinkTextIndex(
-    oldGlobal,
-    normalizedGlobal,
-    changedPointIds,
-  );
-  const relinkedResumeById = new Map<string, ResumeDocument>();
-  for (const resume of resumes) {
-    const relinked = relinkLocalPointsToGlobalByText(resume, relinkTextIndex);
-    if (relinked.changed) {
-      relinkedResumeById.set(resume.id, {
-        ...relinked.resume,
-        updatedAt: now,
-      });
-    }
-  }
-
-  let affected: ResumeDocument[];
+  const affectedIds = new Set<string>(relinked.changedResumeIds);
   if (structuralChange || changedPointIds.length === 0) {
-    affected = resumes.map((resume) => relinkedResumeById.get(resume.id) ?? resume);
+    for (const resume of resumesAfterRelink) {
+      affectedIds.add(resume.id);
+    }
   } else {
-    const affectedIds = new Set<string>(relinkedResumeById.keys());
     for (const pointId of changedPointIds) {
-      for (const resume of resumesReferencingGlobalPoint(resumes, oldGlobal, pointId)) {
+      for (const resume of resumesReferencingGlobalPoint(
+        resumesAfterRelink,
+        normalizedGlobal,
+        pointId,
+      )) {
         affectedIds.add(resume.id);
       }
     }
-    affected = resumes
-      .filter((resume) => affectedIds.has(resume.id))
-      .map((resume) => relinkedResumeById.get(resume.id) ?? resume);
   }
 
+  const affected = resumesAfterRelink.filter((resume) => affectedIds.has(resume.id));
+
+  await saveGlobal(normalizedGlobal);
   if (affected.length > 0) {
     await compileAndUpdateResumes(normalizedGlobal, affected);
   }
 
-  await recordCommitEvent(message, affected.map((resume) => resume.id));
+  const commitResumes = resumesAfterRelink
+    .filter((resume) => relinked.changedResumeIds.has(resume.id) || affectedIds.has(resume.id))
+    .map((resume) => resume.id);
+  await recordCommitEvent(message, commitResumes);
 
   const latestResumes = await loadAllResumes();
   const settings = await loadSettings();

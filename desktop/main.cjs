@@ -77,10 +77,8 @@ function createMainWindow() {
     minWidth: 1180,
     minHeight: 760,
     title: 'Resume Automator',
-    backgroundColor: '#00000000',
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
+    titleBarStyle: 'default',
+    backgroundColor: '#f6f8fb',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

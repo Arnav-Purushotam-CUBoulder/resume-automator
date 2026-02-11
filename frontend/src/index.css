@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
+  --app-bg:
+    radial-gradient(circle at 0% 0%, #dff8ff 0%, transparent 28%),
+    radial-gradient(circle at 100% 20%, #ffedd5 0%, transparent 34%),
+    #f6f8fb;
   --bg-base: #f6f8fb;
   --bg-panel: #ffffff;
   --bg-sidebar: linear-gradient(180deg, #1f2937 0%, #0f172a 100%);
@@ -14,6 +18,25 @@
   --success: #15803d;
   --success-soft: #dcfce7;
   --shadow: 0 10px 24px rgba(12, 22, 44, 0.08);
+  --top-bar-bg: rgba(255, 255, 255, 0.88);
+  --top-bar-blur: blur(8px);
+  --sidebar-text: #f8fafc;
+  --sidebar-muted: #cbd5e1;
+  --tab-bg: rgba(255, 255, 255, 0.08);
+  --tab-border: rgba(255, 255, 255, 0.12);
+  --tab-active-bg: rgba(255, 255, 255, 0.2);
+  --tab-active-border: rgba(255, 255, 255, 0.4);
+  --sidebar-footer-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-footer-border: rgba(255, 255, 255, 0.12);
+  --sidebar-footer-button-bg: #f8fafc;
+  --sidebar-footer-button-text: #0f172a;
+  --control-bg: #f9fbff;
+  --button-bg: #f8fafc;
+  --card-bg: #fcfdff;
+  --resume-card-border: #bfd2ec;
+  --resume-card-bg: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+  --resume-card-meta: #334155;
+  --studio-solid: #ffffff;
   --section-experience: #0f766e;
   --section-education: #1d4ed8;
   --section-skills: #4338ca;
@@ -29,10 +52,7 @@ body {
   margin: 0;
   font-family: 'Space Grotesk', sans-serif;
   color: var(--text-strong);
-  background:
-    radial-gradient(circle at 0% 0%, #dff8ff 0%, transparent 28%),
-    radial-gradient(circle at 100% 20%, #ffedd5 0%, transparent 34%),
-    var(--bg-base);
+  background: var(--app-bg);
 }
 
 button,
@@ -51,7 +71,7 @@ textarea {
 
 .sidebar {
   background: var(--bg-sidebar);
-  color: #f8fafc;
+  color: var(--sidebar-text);
   padding: 14px 18px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -71,7 +91,7 @@ textarea {
 
 .brand p {
   margin: 4px 0 0;
-  color: #cbd5e1;
+  color: var(--sidebar-muted);
   font-size: 0.8rem;
 }
 
@@ -92,9 +112,9 @@ textarea {
 
 .sidebar nav button,
 .tab-strip button {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--tab-bg);
+  color: var(--sidebar-text);
+  border: 1px solid var(--tab-border);
   border-radius: 999px;
   padding: 8px 13px;
   text-align: center;
@@ -105,14 +125,14 @@ textarea {
 
 .sidebar nav button.active,
 .tab-strip button.active {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--tab-active-bg);
   color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: var(--tab-active-border);
 }
 
 .sidebar-footer {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--sidebar-footer-bg);
+  border: 1px solid var(--sidebar-footer-border);
   border-radius: 12px;
   padding: 8px 10px;
   display: flex;
@@ -125,8 +145,8 @@ textarea {
   border: 0;
   border-radius: 8px;
   padding: 8px 11px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--sidebar-footer-button-bg);
+  color: var(--sidebar-footer-button-text);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -139,7 +159,7 @@ textarea {
 
 .sidebar-footer p {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--sidebar-muted);
   font-size: 0.75rem;
   line-height: 1.2;
   flex: 1 1 240px;
@@ -155,8 +175,8 @@ textarea {
 .top-bar {
   padding: 16px 22px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(8px);
+  background: var(--top-bar-bg);
+  backdrop-filter: var(--top-bar-blur);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -224,7 +244,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 11px;
-  background: #f9fbff;
+  background: var(--control-bg);
   color: var(--text-strong);
 }
 
@@ -238,7 +258,7 @@ textarea {
 button {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--button-bg);
   color: var(--text-strong);
   padding: 9px 12px;
   cursor: pointer;
@@ -272,7 +292,7 @@ button.danger {
 .editor-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fcfdff;
+  background: var(--card-bg);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -320,10 +340,10 @@ button.danger {
 
 .resume-card {
   text-align: left;
-  border: 1px solid #bfd2ec;
+  border: 1px solid var(--resume-card-border);
   border-radius: 12px;
   padding: 12px;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+  background: var(--resume-card-bg);
   display: grid;
   gap: 6px;
 }
@@ -347,7 +367,7 @@ button.danger {
 
 .resume-card p {
   margin: 0;
-  color: #334155;
+  color: var(--resume-card-meta);
   font-size: 0.84rem;
 }
 
@@ -455,7 +475,7 @@ button.danger {
 .section-stack {
   border: 2px solid var(--border);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--studio-solid);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -481,7 +501,7 @@ button.danger {
 .block-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fefefe;
+  background: var(--studio-solid);
   padding: 10px;
   display: grid;
   gap: 10px;
@@ -509,7 +529,7 @@ button.danger {
 .code-pane {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--studio-solid);
   padding: 10px;
   display: grid;
   gap: 10px;
@@ -518,7 +538,7 @@ button.danger {
 .history-panel {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fdfefe;
+  background: var(--studio-solid);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -541,7 +561,7 @@ button.danger {
   gap: 2px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: #f8fafc;
+  background: var(--button-bg);
   padding: 8px;
 }
 
@@ -562,7 +582,7 @@ button.danger {
 .studio-right {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--studio-solid);
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -612,6 +632,131 @@ button.danger {
 
 .error-text {
   color: var(--danger);
+}
+
+.theme-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--control-bg);
+}
+
+.theme-switcher span {
+  font-weight: 600;
+}
+
+.theme-switcher select {
+  width: auto;
+  min-width: 130px;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+body.theme-classic {
+  --app-bg:
+    radial-gradient(circle at 0% 0%, #dff8ff 0%, transparent 28%),
+    radial-gradient(circle at 100% 20%, #ffedd5 0%, transparent 34%),
+    #f6f8fb;
+}
+
+body.theme-liquid {
+  --app-bg:
+    radial-gradient(circle at 10% 8%, rgba(187, 238, 255, 0.44) 0%, transparent 34%),
+    radial-gradient(circle at 90% 18%, rgba(255, 230, 209, 0.42) 0%, transparent 36%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(220, 238, 255, 0.08));
+  --bg-base: transparent;
+  --bg-panel: rgba(255, 255, 255, 0.26);
+  --bg-sidebar: linear-gradient(180deg, rgba(12, 24, 46, 0.38) 0%, rgba(19, 40, 74, 0.22) 100%);
+  --text-strong: #071227;
+  --text-muted: #2f4a69;
+  --border: rgba(255, 255, 255, 0.55);
+  --accent-soft: rgba(123, 240, 224, 0.4);
+  --danger-soft: rgba(255, 221, 224, 0.52);
+  --success-soft: rgba(220, 252, 231, 0.52);
+  --shadow: 0 18px 38px rgba(12, 23, 44, 0.26);
+  --top-bar-bg: rgba(255, 255, 255, 0.2);
+  --top-bar-blur: blur(24px) saturate(165%);
+  --sidebar-text: #f2f8ff;
+  --sidebar-muted: #d6e4fb;
+  --tab-bg: rgba(255, 255, 255, 0.16);
+  --tab-border: rgba(255, 255, 255, 0.26);
+  --tab-active-bg: rgba(255, 255, 255, 0.28);
+  --tab-active-border: rgba(255, 255, 255, 0.56);
+  --sidebar-footer-bg: rgba(255, 255, 255, 0.13);
+  --sidebar-footer-border: rgba(255, 255, 255, 0.22);
+  --sidebar-footer-button-bg: rgba(255, 255, 255, 0.76);
+  --sidebar-footer-button-text: #10213f;
+  --control-bg: rgba(255, 255, 255, 0.4);
+  --button-bg: rgba(255, 255, 255, 0.42);
+  --card-bg: rgba(255, 255, 255, 0.34);
+  --resume-card-border: rgba(255, 255, 255, 0.62);
+  --resume-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.44) 0%, rgba(231, 244, 255, 0.24) 100%);
+  --resume-card-meta: #1e3a5d;
+  --studio-solid: rgba(255, 255, 255, 0.27);
+}
+
+body.theme-liquid .sidebar,
+body.theme-liquid .top-bar,
+body.theme-liquid .section-panel,
+body.theme-liquid .studio-shell,
+body.theme-liquid .editor-card,
+body.theme-liquid .resume-card,
+body.theme-liquid .section-stack,
+body.theme-liquid .block-card,
+body.theme-liquid .code-pane,
+body.theme-liquid .history-panel,
+body.theme-liquid .studio-right {
+  backdrop-filter: blur(22px) saturate(155%);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+}
+
+body.theme-dark {
+  --app-bg:
+    radial-gradient(circle at 0% 0%, rgba(24, 63, 96, 0.34) 0%, transparent 28%),
+    radial-gradient(circle at 100% 18%, rgba(98, 57, 27, 0.24) 0%, transparent 32%),
+    #070d18;
+  --bg-base: #070d18;
+  --bg-panel: #111b2f;
+  --bg-sidebar: linear-gradient(180deg, #0a1222 0%, #050a14 100%);
+  --text-strong: #e7eefb;
+  --text-muted: #9fb3d4;
+  --border: #2b3c58;
+  --accent: #14b8a6;
+  --accent-soft: #143e42;
+  --danger: #f87171;
+  --danger-soft: #3b151a;
+  --success: #4ade80;
+  --success-soft: #12301f;
+  --shadow: 0 16px 32px rgba(0, 0, 0, 0.42);
+  --top-bar-bg: rgba(10, 17, 31, 0.88);
+  --top-bar-blur: blur(8px) saturate(120%);
+  --sidebar-text: #dce6f8;
+  --sidebar-muted: #9cb1cf;
+  --tab-bg: rgba(255, 255, 255, 0.06);
+  --tab-border: rgba(255, 255, 255, 0.16);
+  --tab-active-bg: rgba(20, 184, 166, 0.25);
+  --tab-active-border: rgba(20, 184, 166, 0.6);
+  --sidebar-footer-bg: rgba(255, 255, 255, 0.05);
+  --sidebar-footer-border: rgba(255, 255, 255, 0.12);
+  --sidebar-footer-button-bg: #1f2e47;
+  --sidebar-footer-button-text: #eff6ff;
+  --control-bg: #0e1728;
+  --button-bg: #111f34;
+  --card-bg: #13233b;
+  --resume-card-border: #35507a;
+  --resume-card-bg: linear-gradient(180deg, #152740 0%, #102033 100%);
+  --resume-card-meta: #b4c8e7;
+  --studio-solid: #102036;
+}
+
+body.theme-dark .sidebar nav button.active,
+body.theme-dark .tab-strip button.active {
+  color: #ecfeff;
 }
 
 .span-2 {

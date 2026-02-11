@@ -36,6 +36,9 @@ import { deepClone } from './utils/clone';
 
 type TabKey = 'resumes' | 'header' | 'emails' | 'locations' | 'output' | SectionKey;
 type StudioMode = 'blocks' | 'latex';
+type ThemeMode = 'classic' | 'liquid' | 'dark';
+
+const themeStorageKey = 'resume_automator_theme_mode';
 
 const tabOrder: TabKey[] = [
   'resumes',
@@ -2348,6 +2351,16 @@ function ResumeStudio({
 }
 
 export default function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') {
+      return 'classic';
+    }
+    const stored = window.localStorage.getItem(themeStorageKey);
+    if (stored === 'classic' || stored === 'liquid' || stored === 'dark') {
+      return stored;
+    }
+    return 'classic';
+  });
   const [state, setState] = useState<AppStateResponse | null>(null);
   const [draftGlobal, setDraftGlobal] = useState<GlobalCatalog | null>(null);
   const [draftSettings, setDraftSettings] = useState<AppSettings | null>(null);
@@ -2407,6 +2420,12 @@ export default function App() {
     }, 8000);
     return () => window.clearInterval(timer);
   }, [loading, selectedResumeId, selectedEmail, selectedLocation]);
+
+  useEffect(() => {
+    document.body.classList.remove('theme-classic', 'theme-liquid', 'theme-dark');
+    document.body.classList.add(`theme-${themeMode}`);
+    window.localStorage.setItem(themeStorageKey, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!selectedResumeId) {
@@ -2727,7 +2746,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell theme-${themeMode}`}>
       <aside className="sidebar">
         <div className="brand">
           <h1>Resume Automator</h1>
@@ -2768,6 +2787,17 @@ export default function App() {
             </p>
           </div>
           <div className="status-area">
+            <label className="theme-switcher">
+              <span>Theme</span>
+              <select
+                value={themeMode}
+                onChange={(e) => setThemeMode(e.target.value as ThemeMode)}
+              >
+                <option value="classic">Classic</option>
+                <option value="liquid">Liquid Glass</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
             {loading && <span className="badge">Working...</span>}
             {notice && <span className="badge success">{notice}</span>}
             {error && <span className="badge error">{error}</span>}

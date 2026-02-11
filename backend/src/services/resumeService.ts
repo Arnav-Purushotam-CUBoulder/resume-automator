@@ -26,7 +26,6 @@ import {
   saveSettings,
   saveCommitEvent,
   saveGlobal,
-  saveResume,
   saveResumes,
 } from '../storage/dataStore.js';
 import { nowIso } from '../utils/time.js';
@@ -906,20 +905,25 @@ export async function updateResumeDocument(
     return null;
   }
 
-  const now = nowIso();
-  const updatedResume: ResumeDocument = {
-    ...nextResume,
-    id: resumeId,
-    templateId: existing.templateId,
-    variantEmail: existing.variantEmail,
-    variantLocation: existing.variantLocation,
-    createdAt: existing.createdAt,
-    updatedAt: now,
-  };
+  const templateId = existing.templateId || existing.id;
+  const family = normalized.resumes.filter((resume) =>
+    (resume.templateId || resume.id) === templateId,
+  );
 
-  await saveResume(updatedResume);
-  await compileAndUpdateResumes(global, [updatedResume]);
-  await recordCommitEvent(message, [resumeId]);
+  const now = nowIso();
+  const updatedFamily: ResumeDocument[] = family.map((resume) => ({
+    ...nextResume,
+    id: resume.id,
+    templateId: resume.templateId,
+    variantEmail: resume.variantEmail,
+    variantLocation: resume.variantLocation,
+    createdAt: resume.createdAt,
+    updatedAt: now,
+  }));
+
+  await saveResumes(updatedFamily);
+  await compileAndUpdateResumes(global, updatedFamily);
+  await recordCommitEvent(message, updatedFamily.map((resume) => resume.id));
   return getResumeDetail(resumeId);
 }
 

@@ -95,6 +95,156 @@ function hasGlobalStructuralChange(oldGlobal: GlobalCatalog, nextGlobal: GlobalC
   return JSON.stringify(oldShape) !== JSON.stringify(nextShape);
 }
 
+const pointBearingSections = ['experience', 'projects', 'openSource'] as const;
+type PointBearingSection = (typeof pointBearingSections)[number];
+
+function normalizePointText(text?: string): string {
+  return (text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function buildRelinkTextIndex(
+  oldGlobal: GlobalCatalog,
+  nextGlobal: GlobalCatalog,
+  changedPointIds: string[],
+): Map<string, string> {
+  const oldTextCounts = new Map<string, number>();
+
+  for (const pointId of changedPointIds) {
+    const oldText = normalizePointText(oldGlobal.points[pointId]?.text);
+    const nextText = normalizePointText(nextGlobal.points[pointId]?.text);
+    if (!oldText || !nextText || oldText === nextText) {
+      continue;
+    }
+    oldTextCounts.set(oldText, (oldTextCounts.get(oldText) ?? 0) + 1);
+  }
+
+  const index = new Map<string, string>();
+  for (const pointId of changedPointIds) {
+    const oldText = normalizePointText(oldGlobal.points[pointId]?.text);
+    const nextText = normalizePointText(nextGlobal.points[pointId]?.text);
+    if (!oldText || !nextText || oldText === nextText) {
+      continue;
+    }
+    // Ambiguous source text (same old text mapped to multiple global points) is skipped.
+    if ((oldTextCounts.get(oldText) ?? 0) !== 1) {
+      continue;
+    }
+    index.set(oldText, pointId);
+  }
+
+  return index;
+}
+
+function collectUsedLocalPointIds(resume: ResumeDocument): Set<string> {
+  const used = new Set<string>();
+
+  for (const section of pointBearingSections) {
+    const localEntryById = new Map(
+      resume.local[section].map((entry) => [entry.id, entry] as const),
+    );
+
+    for (const ref of resume.sections[section]) {
+      if (!ref.localId) {
+        continue;
+      }
+      const localEntry = localEntryById.get(ref.localId);
+      if (!localEntry) {
+        continue;
+      }
+      for (const pointId of localEntry.pointIds) {
+        if (resume.local.points[pointId]) {
+          used.add(pointId);
+        }
+      }
+      for (const pointId of ref.includePointIds ?? []) {
+        if (resume.local.points[pointId]) {
+          used.add(pointId);
+        }
+      }
+    }
+  }
+
+  return used;
+}
+
+function relinkLocalPointsToGlobalByText(
+  resume: ResumeDocument,
+  relinkTextIndex: Map<string, string>,
+): { resume: ResumeDocument; changed: boolean } {
+  if (relinkTextIndex.size === 0) {
+    return { resume, changed: false };
+  }
+
+  const next = JSON.parse(JSON.stringify(resume)) as ResumeDocument;
+  let changed = false;
+
+  const replacePointIds = (pointIds: string[]): string[] => {
+    const nextPointIds: string[] = [];
+    const seen = new Set<string>();
+
+    for (const pointId of pointIds) {
+      let mappedPointId = pointId;
+      const localPoint = next.local.points[pointId];
+      if (localPoint) {
+        const targetGlobalPointId = relinkTextIndex.get(normalizePointText(localPoint.text));
+        if (targetGlobalPointId && targetGlobalPointId !== pointId) {
+          mappedPointId = targetGlobalPointId;
+          changed = true;
+        }
+      }
+
+      if (!seen.has(mappedPointId)) {
+        nextPointIds.push(mappedPointId);
+        seen.add(mappedPointId);
+      } else {
+        changed = true;
+      }
+    }
+
+    return nextPointIds;
+  };
+
+  for (const section of pointBearingSections) {
+    const localEntryById = new Map(
+      next.local[section].map((entry) => [entry.id, entry] as const),
+    );
+
+    for (const ref of next.sections[section]) {
+      if (!ref.localId) {
+        continue;
+      }
+      const localEntry = localEntryById.get(ref.localId);
+      if (!localEntry) {
+        continue;
+      }
+
+      const nextPointIds = replacePointIds(localEntry.pointIds);
+      if (JSON.stringify(nextPointIds) !== JSON.stringify(localEntry.pointIds)) {
+        localEntry.pointIds = nextPointIds;
+        changed = true;
+      }
+
+      if (ref.includePointIds) {
+        const nextIncludePointIds = replacePointIds(ref.includePointIds);
+        if (JSON.stringify(nextIncludePointIds) !== JSON.stringify(ref.includePointIds)) {
+          ref.includePointIds = nextIncludePointIds;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  const usedLocalPointIds = collectUsedLocalPointIds(next);
+  for (const pointId of Object.keys(next.local.points)) {
+    if (!usedLocalPointIds.has(pointId)) {
+      delete next.local.points[pointId];
+      changed = true;
+    }
+  }
+
+  return { resume: next, changed };
+}
+
 async function compileAndUpdateResumes(
   global: GlobalCatalog,
   resumes: ResumeDocument[],
@@ -310,17 +460,35 @@ export async function updateGlobalCatalog(
 
   await saveGlobal(normalizedGlobal);
 
+  const relinkTextIndex = buildRelinkTextIndex(
+    oldGlobal,
+    normalizedGlobal,
+    changedPointIds,
+  );
+  const relinkedResumeById = new Map<string, ResumeDocument>();
+  for (const resume of resumes) {
+    const relinked = relinkLocalPointsToGlobalByText(resume, relinkTextIndex);
+    if (relinked.changed) {
+      relinkedResumeById.set(resume.id, {
+        ...relinked.resume,
+        updatedAt: now,
+      });
+    }
+  }
+
   let affected: ResumeDocument[];
   if (structuralChange || changedPointIds.length === 0) {
-    affected = resumes;
+    affected = resumes.map((resume) => relinkedResumeById.get(resume.id) ?? resume);
   } else {
-    const affectedIds = new Set<string>();
+    const affectedIds = new Set<string>(relinkedResumeById.keys());
     for (const pointId of changedPointIds) {
       for (const resume of resumesReferencingGlobalPoint(resumes, oldGlobal, pointId)) {
         affectedIds.add(resume.id);
       }
     }
-    affected = resumes.filter((resume) => affectedIds.has(resume.id));
+    affected = resumes
+      .filter((resume) => affectedIds.has(resume.id))
+      .map((resume) => relinkedResumeById.get(resume.id) ?? resume);
   }
 
   if (affected.length > 0) {

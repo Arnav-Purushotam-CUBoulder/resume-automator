@@ -2448,6 +2448,18 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [globalDirty, setGlobalDirty] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+
+  const handleDraftGlobalChange = (next: GlobalCatalog) => {
+    setDraftGlobal(next);
+    setGlobalDirty(true);
+  };
+
+  const handleDraftSettingsChange = (next: AppSettings) => {
+    setDraftSettings(next);
+    setSettingsDirty(true);
+  };
 
   const loadState = async () => {
     const next = await getState();
@@ -2483,13 +2495,13 @@ export default function App() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (document.hidden || loading) {
+      if (document.hidden || loading || globalDirty || settingsDirty) {
         return;
       }
       loadState().catch(() => undefined);
-    }, 8000);
+    }, 20000);
     return () => window.clearInterval(timer);
-  }, [loading, selectedResumeId, selectedEmail, selectedLocation]);
+  }, [loading, selectedResumeId, selectedEmail, selectedLocation, globalDirty, settingsDirty]);
 
   useEffect(() => {
     document.body.classList.remove('theme-classic', 'theme-liquid', 'theme-dark');
@@ -2535,20 +2547,6 @@ export default function App() {
     }
   }, [state, selectedEmail, selectedLocation, selectedResumeId]);
 
-  const globalDirty = useMemo(() => {
-    if (!state || !draftGlobal) {
-      return false;
-    }
-    return JSON.stringify(state.global) !== JSON.stringify(draftGlobal);
-  }, [state, draftGlobal]);
-
-  const settingsDirty = useMemo(() => {
-    if (!state || !draftSettings) {
-      return false;
-    }
-    return JSON.stringify(state.settings) !== JSON.stringify(draftSettings);
-  }, [state, draftSettings]);
-
   const syncVariantSelectors = (global: GlobalCatalog) => {
     const emails = global.contactVariants.emails;
     const locations = global.contactVariants.locations;
@@ -2585,6 +2583,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      setGlobalDirty(false);
       syncVariantSelectors(sorted.global);
 
       if (selectedResumeId) {
@@ -2604,6 +2603,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      setGlobalDirty(false);
       syncVariantSelectors(sorted.global);
 
       if (selectedResumeId) {
@@ -2624,6 +2624,7 @@ export default function App() {
         exportPdfDir: draftSettings.exportPdfDir,
       });
       setDraftSettings(deepClone(saved));
+      setSettingsDirty(false);
       setState((prev) => (prev ? { ...prev, settings: saved } : prev));
       setNotice('PDF sync folder saved. Existing compiled PDFs were synchronized.');
     });
@@ -2637,6 +2638,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      setGlobalDirty(false);
       syncVariantSelectors(sorted.global);
       setSelectedResumeId(created.resume.id);
       setDetail(created);
@@ -2667,6 +2669,7 @@ export default function App() {
       setState(sorted);
       setDraftGlobal(deepClone(sorted.global));
       setDraftSettings((prev) => prev ?? deepClone(sorted.settings));
+      setGlobalDirty(false);
       syncVariantSelectors(sorted.global);
 
       if (selectedResumeId && selectedResumeId === resumeId) {
@@ -2914,40 +2917,40 @@ export default function App() {
           )}
 
           {activeTab === 'header' && (
-            <HeaderEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <HeaderEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'spacing' && (
-            <SpacingEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <SpacingEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'emails' && (
-            <EmailVariantsEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <EmailVariantsEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'locations' && (
-            <LocationVariantsEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <LocationVariantsEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'output' && (
             <OutputSettingsEditor
               settings={draftSettings}
-              onChange={setDraftSettings}
+              onChange={handleDraftSettingsChange}
               onSave={commitSettings}
               saving={loading}
               dirty={settingsDirty}
             />
           )}
           {activeTab === 'education' && (
-            <EducationEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <EducationEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'skills' && (
-            <SkillsEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <SkillsEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'experience' && (
-            <ExperienceEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <ExperienceEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'projects' && (
-            <ProjectsEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <ProjectsEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
           {activeTab === 'openSource' && (
-            <OpenSourceEditor global={draftGlobal} onChange={setDraftGlobal} />
+            <OpenSourceEditor global={draftGlobal} onChange={handleDraftGlobalChange} />
           )}
         </section>
       </main>

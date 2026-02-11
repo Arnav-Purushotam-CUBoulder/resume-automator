@@ -216,7 +216,7 @@ async function compileLatexAtPath(
     );
     return {
       ok: true,
-      message: `Compiled successfully with ${compiler}.`,
+      message: `Compiled successfully with ${compiler.kind}${compiler.command ? ` (${compiler.command})` : ''}.`,
       pdfPath,
       texPath,
       logPath,

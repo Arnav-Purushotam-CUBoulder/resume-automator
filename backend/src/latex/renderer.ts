@@ -107,8 +107,8 @@ function renderEducation(
     )
     .join('\n');
 
-  return `${renderSectionHeading('Education', spacing, firstVisibleSection)}
-\\resumeSubHeadingListStart
+  return String.raw`${renderSectionHeading('Education', spacing, firstVisibleSection)}
+\resumeSubHeadingListStart
 ${rows}\resumeSubHeadingListEnd`;
 }
 
@@ -124,8 +124,8 @@ function renderSkills(
     )
     .join('\n');
 
-  return `${renderSectionHeading('Skills', spacing, firstVisibleSection)}
-\\begin{itemize}[leftmargin=0.15in, label={}, itemsep=1pt, topsep=0pt, parsep=0pt, partopsep=0pt]
+  return String.raw`${renderSectionHeading('Skills', spacing, firstVisibleSection)}
+\begin{itemize}[leftmargin=0.15in, label={}, itemsep=1pt, topsep=0pt, parsep=0pt, partopsep=0pt]
 ${rows}
 \end{itemize}`;
 }
@@ -159,8 +159,8 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return `${renderSectionHeading('Open Source Contributions', spacing, firstVisibleSection)}
-\\resumeSubHeadingListStart
+  return String.raw`${renderSectionHeading('Open Source Contributions', spacing, firstVisibleSection)}
+\resumeSubHeadingListStart
 ${body}\resumeSubHeadingListEnd`;
 }
 
@@ -183,8 +183,8 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return `${renderSectionHeading('Projects', spacing, firstVisibleSection)}
-\\resumeSubHeadingListStart
+  return String.raw`${renderSectionHeading('Projects', spacing, firstVisibleSection)}
+\resumeSubHeadingListStart
 \vspace{-13pt}
 ${body}\resumeSubHeadingListEnd`;
 }
@@ -208,8 +208,8 @@ ${renderPointList(entry.pointIds, points)}
     )
     .join('\n');
 
-  return `${renderSectionHeading('Experience', spacing, firstVisibleSection)}
-\\resumeSubHeadingListStart
+  return String.raw`${renderSectionHeading('Experience', spacing, firstVisibleSection)}
+\resumeSubHeadingListStart
 ${body}\resumeSubHeadingListEnd`;
 }
 

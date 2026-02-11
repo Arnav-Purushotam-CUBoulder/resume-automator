@@ -101,6 +101,12 @@ function buildPdfPreviewUrl(url: string): string {
   if (!params.has('pagemode')) {
     params.set('pagemode', 'none');
   }
+  if (!params.has('navpanes')) {
+    params.set('navpanes', '0');
+  }
+  if (!params.has('statusbar')) {
+    params.set('statusbar', '0');
+  }
 
   return `${base}#${params.toString()}`;
 }
@@ -2425,7 +2431,7 @@ export default function App() {
           <p>Git-backed LaTeX resume studio</p>
         </div>
 
-        <nav>
+        <nav className="tab-strip">
           {tabOrder.map((tab) => (
             <button
               key={tab}

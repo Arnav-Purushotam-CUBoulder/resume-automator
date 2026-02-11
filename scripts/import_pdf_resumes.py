@@ -74,11 +74,10 @@ def normalize_line(line: str) -> str:
     line = line.replace(" A WS", " AWS")
     line = re.sub(r"\s+", " ", line).strip()
 
-    # Join OCR/ligature artifacts like "W eb" => "Web".
-    prev = None
-    while prev != line:
-        prev = line
-        line = re.sub(r"\b([A-Za-z])\s+([A-Za-z]{2,})\b", r"\1\2", line)
+    # Fix common OCR splits without collapsing legitimate article spacing.
+    line = line.replace("W eb", "Web")
+    line = line.replace("T ools", "Tools")
+    line = line.replace("A gentic", "Agentic")
 
     return line
 

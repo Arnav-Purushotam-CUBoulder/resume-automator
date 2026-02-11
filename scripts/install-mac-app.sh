@@ -22,7 +22,7 @@ find /Applications -maxdepth 1 -name 'Resume Automator.app.bak.*' -exec rm -rf {
 rm -rf "$DEST_APP"
 cp -R "$SRC_APP" "$DEST_APP"
 
-# Remove the build app bundle so Spotlight does not index a duplicate.
-rm -rf "$SRC_APP"
+# Remove build artifacts so Spotlight does not index duplicate app entries.
+rm -rf "$PWD/release/mac-arm64"
 
 echo "Installed: $DEST_APP"

@@ -130,6 +130,21 @@ function hasGlobalStructuralChange(oldGlobal: GlobalCatalog, nextGlobal: GlobalC
 
 const pointBearingSections = ['experience', 'projects', 'openSource'] as const;
 
+const pointSpacingArtifactFixes: Array<[RegExp, string]> = [
+  [/\bamodular\b/gi, 'a modular'],
+  [/\bafile-backed\b/gi, 'a file-backed'],
+  [/\bapluggable\b/gi, 'a pluggable'],
+  [/\bascalable\b/gi, 'a scalable'],
+  [/\bacontract\/compliance\b/gi, 'a contract/compliance'],
+  [/\baprivacy-first\b/gi, 'a privacy-first'],
+  [/\bamicroservices\b/gi, 'a microservices'],
+  [/\baReact\b/g, 'a React'],
+  [/\baCU\b/g, 'a CU'],
+  [/\baserverless\b/gi, 'a serverless'],
+  [/\b(\d+)\s*xand\b/gi, '$1x and'],
+  [/\b(\d+)xand\b/gi, '$1x and'],
+];
+
 function uniqueNonEmpty(values: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -148,6 +163,15 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
   const fallbackEmail = global.header.email?.trim() || 'user@example.com';
   const fallbackLocation = global.header.location?.trim() || 'Unknown, USA';
   const spacing = global.spacing ?? defaultGlobalSpacing;
+  const normalizedPoints = Object.fromEntries(
+    Object.entries(global.points ?? {}).map(([pointId, point]) => [
+      pointId,
+      {
+        id: point?.id || pointId,
+        text: normalizePointText(point?.text),
+      },
+    ]),
+  );
 
   const emails = uniqueNonEmpty([
     ...(global.contactVariants?.emails ?? []),
@@ -169,6 +193,7 @@ function normalizeGlobalCatalog(global: GlobalCatalog): GlobalCatalog {
       emails: emails.length ? emails : [fallbackEmail],
       locations: locations.length ? locations : [fallbackLocation],
     },
+    points: normalizedPoints,
     spacing: {
       headerToFirstSectionPt: clampSpacingValue(
         spacing.headerToFirstSectionPt,
@@ -261,7 +286,11 @@ function getExportPathCandidatesForResume(resume: ResumeDocument): string[] {
 }
 
 function normalizePointText(text?: string): string {
-  return (text ?? '').replace(/\s+/g, ' ').trim();
+  let normalized = (text ?? '').replace(/\s+/g, ' ').trim();
+  for (const [pattern, replacement] of pointSpacingArtifactFixes) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+  return normalized;
 }
 
 function stripLatexForMatching(text: string): string {
@@ -296,59 +325,32 @@ function buildPointMatchKey(text?: string): string {
     .trim();
 }
 
-function pointTextTokens(text?: string): Set<string> {
-  const key = buildPointMatchKey(text);
-  if (!key) {
-    return new Set<string>();
-  }
-  return new Set<string>(key.split(' ').filter(Boolean));
-}
-
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  if (!a.size || !b.size) {
-    return 0;
-  }
-  let intersection = 0;
-  for (const token of a) {
-    if (b.has(token)) {
-      intersection += 1;
-    }
-  }
-  const union = new Set<string>([...a, ...b]).size;
-  return union ? intersection / union : 0;
-}
-
 function buildAutoPointAliasMap(global: GlobalCatalog): Map<string, string> {
   const aliasMap = new Map<string, string>();
   const pointIds = Object.keys(global.points);
-  const nonAutoIds = pointIds.filter((id) => !id.startsWith('pt_auto_'));
-  const nonAutoTokens = new Map<string, Set<string>>();
-
-  for (const id of nonAutoIds) {
-    nonAutoTokens.set(id, pointTextTokens(global.points[id]?.text));
+  const nonAutoByKey = new Map<string, string>();
+  for (const id of pointIds) {
+    if (id.startsWith('pt_auto_')) {
+      continue;
+    }
+    const key = buildPointMatchKey(global.points[id]?.text);
+    if (!key || nonAutoByKey.has(key)) {
+      continue;
+    }
+    nonAutoByKey.set(key, id);
   }
 
   for (const id of pointIds) {
     if (!id.startsWith('pt_auto_')) {
       continue;
     }
-    const autoTokens = pointTextTokens(global.points[id]?.text);
-    if (!autoTokens.size) {
+    const autoKey = buildPointMatchKey(global.points[id]?.text);
+    if (!autoKey) {
       continue;
     }
-
-    let bestId: string | undefined;
-    let bestScore = 0;
-    for (const candidateId of nonAutoIds) {
-      const score = jaccardSimilarity(autoTokens, nonAutoTokens.get(candidateId) ?? new Set<string>());
-      if (score > bestScore) {
-        bestScore = score;
-        bestId = candidateId;
-      }
-    }
-
-    if (bestId && bestScore >= 0.9) {
-      aliasMap.set(id, bestId);
+    const existing = nonAutoByKey.get(autoKey);
+    if (existing) {
+      aliasMap.set(id, existing);
     }
   }
 
@@ -357,6 +359,34 @@ function buildAutoPointAliasMap(global: GlobalCatalog): Map<string, string> {
 
 function normalizeComparable(input?: string): string {
   return (input ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function normalizeResumeLocalPointTexts(resume: ResumeDocument): ResumeDocument {
+  let changed = false;
+  const normalizedLocalPoints: ResumeDocument['local']['points'] = {};
+  for (const [pointId, point] of Object.entries(resume.local.points ?? {})) {
+    const normalizedText = normalizePointText(point?.text);
+    const normalizedId = point?.id || pointId;
+    if (normalizedText !== point?.text || normalizedId !== point?.id) {
+      changed = true;
+    }
+    normalizedLocalPoints[pointId] = {
+      id: normalizedId,
+      text: normalizedText,
+    };
+  }
+
+  if (!changed) {
+    return resume;
+  }
+
+  return {
+    ...resume,
+    local: {
+      ...resume.local,
+      points: normalizedLocalPoints,
+    },
+  };
 }
 
 function remapPointIds(pointIds: string[] | undefined, aliasMap: Map<string, string>): string[] {
@@ -534,7 +564,7 @@ function relinkResumeLocalPointsToGlobal(
             targetGlobalPointId = createGlobalPointId(global);
             global.points[targetGlobalPointId] = {
               id: targetGlobalPointId,
-              text: localPoint.text,
+              text: normalizePointText(localPoint.text),
             };
             pointMatchIndex.set(pointKey, targetGlobalPointId);
           }
@@ -890,7 +920,8 @@ async function normalizeStoredState(): Promise<{
   const normalizedGlobal = normalizeGlobalCatalog(globalRaw);
 
   const normalizedResumes = resumesRaw.map((resume) => {
-    const base = normalizeResumeVariantMetadata(resume, normalizedGlobal);
+    const withVariant = normalizeResumeVariantMetadata(resume, normalizedGlobal);
+    const base = normalizeResumeLocalPointTexts(withVariant);
     if (
       base.headerMode === 'local'
       && base.localHeader
@@ -1308,7 +1339,7 @@ export async function overridePointForResume(
 
   resume.local.points[localPointId] = {
     id: localPointId,
-    text: input.text,
+    text: normalizePointText(input.text),
   };
 
   return updateResumeDocument(

@@ -88,6 +88,23 @@ function formatDateTime(value?: string): string {
   return date.toLocaleString();
 }
 
+function buildPdfPreviewUrl(url: string): string {
+  const [base, hash = ''] = url.split('#', 2);
+  const params = new URLSearchParams(hash);
+
+  if (!params.has('zoom')) {
+    params.set('zoom', 'page-width');
+  }
+  if (!params.has('view')) {
+    params.set('view', 'FitH');
+  }
+  if (!params.has('pagemode')) {
+    params.set('pagemode', 'none');
+  }
+
+  return `${base}#${params.toString()}`;
+}
+
 function latexToPlainText(input: string): string {
   return input
     .replace(/\\href\{([^}]*)\}\{([^}]*)\}/g, '$2')
@@ -1951,7 +1968,8 @@ function ResumeStudio({
     openSource: '',
   });
 
-  const displayedPdfUrl = snapshot?.pdfUrl ?? detail.pdfUrl;
+  const displayedPdfUrlRaw = snapshot?.pdfUrl ?? detail.pdfUrl;
+  const displayedPdfUrl = displayedPdfUrlRaw ? buildPdfPreviewUrl(displayedPdfUrlRaw) : undefined;
 
   return (
     <div className="studio-shell">
@@ -2115,7 +2133,7 @@ function ResumeStudio({
             </p>
           </div>
           {displayedPdfUrl ? (
-            <iframe src={displayedPdfUrl} title="Resume PDF Preview" />
+            <iframe key={displayedPdfUrl} src={displayedPdfUrl} title="Resume PDF Preview" />
           ) : (
             <div className="preview-empty">
               <p>No PDF available yet.</p>

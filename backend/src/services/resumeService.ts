@@ -244,6 +244,161 @@ function buildPointMatchKey(text?: string): string {
     .trim();
 }
 
+function pointTextTokens(text?: string): Set<string> {
+  const key = buildPointMatchKey(text);
+  if (!key) {
+    return new Set<string>();
+  }
+  return new Set<string>(key.split(' ').filter(Boolean));
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) {
+    return 0;
+  }
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) {
+      intersection += 1;
+    }
+  }
+  const union = new Set<string>([...a, ...b]).size;
+  return union ? intersection / union : 0;
+}
+
+function buildAutoPointAliasMap(global: GlobalCatalog): Map<string, string> {
+  const aliasMap = new Map<string, string>();
+  const pointIds = Object.keys(global.points);
+  const nonAutoIds = pointIds.filter((id) => !id.startsWith('pt_auto_'));
+  const nonAutoTokens = new Map<string, Set<string>>();
+
+  for (const id of nonAutoIds) {
+    nonAutoTokens.set(id, pointTextTokens(global.points[id]?.text));
+  }
+
+  for (const id of pointIds) {
+    if (!id.startsWith('pt_auto_')) {
+      continue;
+    }
+    const autoTokens = pointTextTokens(global.points[id]?.text);
+    if (!autoTokens.size) {
+      continue;
+    }
+
+    let bestId: string | undefined;
+    let bestScore = 0;
+    for (const candidateId of nonAutoIds) {
+      const score = jaccardSimilarity(autoTokens, nonAutoTokens.get(candidateId) ?? new Set<string>());
+      if (score > bestScore) {
+        bestScore = score;
+        bestId = candidateId;
+      }
+    }
+
+    if (bestId && bestScore >= 0.9) {
+      aliasMap.set(id, bestId);
+    }
+  }
+
+  return aliasMap;
+}
+
+function normalizeComparable(input?: string): string {
+  return (input ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function remapPointIds(pointIds: string[] | undefined, aliasMap: Map<string, string>): string[] {
+  if (!pointIds || !pointIds.length) {
+    return [];
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of pointIds) {
+    const mapped = aliasMap.get(id) ?? id;
+    if (seen.has(mapped)) {
+      continue;
+    }
+    seen.add(mapped);
+    out.push(mapped);
+  }
+  return out;
+}
+
+function applyPointAliasMapToGlobalAndResumes(
+  global: GlobalCatalog,
+  resumes: ResumeDocument[],
+  aliasMap: Map<string, string>,
+): { global: GlobalCatalog; resumes: ResumeDocument[]; changed: boolean } {
+  if (!aliasMap.size) {
+    return { global, resumes, changed: false };
+  }
+
+  let changed = false;
+  const nextGlobal = JSON.parse(JSON.stringify(global)) as GlobalCatalog;
+  const nextResumes = JSON.parse(JSON.stringify(resumes)) as ResumeDocument[];
+
+  for (const section of pointBearingSections) {
+    for (const entry of nextGlobal.sections[section]) {
+      const nextPointIds = remapPointIds(entry.pointIds, aliasMap);
+      if (JSON.stringify(nextPointIds) !== JSON.stringify(entry.pointIds)) {
+        entry.pointIds = nextPointIds;
+        changed = true;
+      }
+    }
+  }
+
+  for (const [from] of aliasMap) {
+    if (nextGlobal.points[from]) {
+      delete nextGlobal.points[from];
+      changed = true;
+    }
+  }
+
+  for (const resume of nextResumes) {
+    for (const section of pointBearingSections) {
+      for (const entry of resume.local[section]) {
+        const nextPointIds = remapPointIds(entry.pointIds, aliasMap);
+        if (JSON.stringify(nextPointIds) !== JSON.stringify(entry.pointIds)) {
+          entry.pointIds = nextPointIds;
+          changed = true;
+        }
+      }
+      for (const ref of resume.sections[section]) {
+        if (ref.includePointIds) {
+          const nextInclude = remapPointIds(ref.includePointIds, aliasMap);
+          if (JSON.stringify(nextInclude) !== JSON.stringify(ref.includePointIds)) {
+            ref.includePointIds = nextInclude;
+            changed = true;
+          }
+        }
+        if (ref.pointOverrides) {
+          const remapped: Record<string, string> = {};
+          let overridesChanged = false;
+          for (const [pointId, overrideId] of Object.entries(ref.pointOverrides)) {
+            const mappedPointId = aliasMap.get(pointId) ?? pointId;
+            if (mappedPointId !== pointId) {
+              overridesChanged = true;
+            }
+            if (!(mappedPointId in remapped)) {
+              remapped[mappedPointId] = overrideId;
+            }
+          }
+          if (overridesChanged) {
+            ref.pointOverrides = remapped;
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    global: nextGlobal,
+    resumes: nextResumes,
+    changed,
+  };
+}
+
 function buildGlobalPointMatchIndex(global: GlobalCatalog): Map<string, string> {
   const index = new Map<string, string>();
   const pointIds = Object.keys(global.points).sort();
@@ -682,23 +837,47 @@ async function normalizeStoredState(): Promise<{
   const [globalRaw, resumesRaw] = await Promise.all([loadGlobal(), loadAllResumes()]);
   const normalizedGlobal = normalizeGlobalCatalog(globalRaw);
 
-  const normalizedResumes = resumesRaw.map((resume) =>
-    normalizeResumeVariantMetadata(resume, normalizedGlobal),
-  );
+  const normalizedResumes = resumesRaw.map((resume) => {
+    const base = normalizeResumeVariantMetadata(resume, normalizedGlobal);
+    if (
+      base.headerMode === 'local'
+      && base.localHeader
+      && normalizeComparable(base.localHeader.name) === normalizeComparable(normalizedGlobal.header.name)
+      && base.localHeader.name !== normalizedGlobal.header.name
+    ) {
+      return {
+        ...base,
+        localHeader: {
+          ...base.localHeader,
+          name: normalizedGlobal.header.name,
+        },
+      };
+    }
+    return base;
+  });
 
-  const globalChanged = JSON.stringify(globalRaw) !== JSON.stringify(normalizedGlobal);
-  const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(normalizedResumes);
+  const autoAliasMap = buildAutoPointAliasMap(normalizedGlobal);
+  const aliased = applyPointAliasMapToGlobalAndResumes(
+    normalizedGlobal,
+    normalizedResumes,
+    autoAliasMap,
+  );
+  const finalGlobal = aliased.global;
+  const finalResumes = aliased.resumes;
+
+  const globalChanged = JSON.stringify(globalRaw) !== JSON.stringify(finalGlobal);
+  const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(finalResumes);
 
   if (globalChanged) {
-    await saveGlobal(normalizedGlobal);
+    await saveGlobal(finalGlobal);
   }
   if (resumesChanged) {
-    await saveResumes(normalizedResumes);
+    await saveResumes(finalResumes);
   }
 
   return {
-    global: normalizedGlobal,
-    resumes: normalizedResumes,
+    global: finalGlobal,
+    resumes: finalResumes,
   };
 }
 

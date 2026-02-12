@@ -602,14 +602,18 @@ function applyPointAliasMapToGlobalAndResumes(
           let overridesChanged = false;
           for (const [pointId, overrideId] of Object.entries(ref.pointOverrides)) {
             const mappedPointId = aliasMap.get(pointId) ?? pointId;
+            const mappedOverrideId = aliasMap.get(overrideId) ?? overrideId;
             if (mappedPointId !== pointId) {
               overridesChanged = true;
             }
+            if (mappedOverrideId !== overrideId) {
+              overridesChanged = true;
+            }
             if (!(mappedPointId in remapped)) {
-              remapped[mappedPointId] = overrideId;
+              remapped[mappedPointId] = mappedOverrideId;
             }
           }
-          if (overridesChanged) {
+          if (overridesChanged || JSON.stringify(remapped) !== JSON.stringify(ref.pointOverrides)) {
             ref.pointOverrides = remapped;
             changed = true;
           }
@@ -693,32 +697,39 @@ function relinkResumeLocalPointsToGlobal(
   const next = JSON.parse(JSON.stringify(resume)) as ResumeDocument;
   let changed = false;
 
+  const mapPointIdToGlobal = (pointId: string): string => {
+    const localPoint = next.local.points[pointId];
+    if (!localPoint) {
+      return pointId;
+    }
+
+    const pointKey = buildPointMatchKey(localPoint.text);
+    if (!pointKey) {
+      return pointId;
+    }
+
+    let targetGlobalPointId = pointMatchIndex.get(pointKey);
+    if (!targetGlobalPointId) {
+      targetGlobalPointId = createGlobalPointId(global);
+      global.points[targetGlobalPointId] = {
+        id: targetGlobalPointId,
+        text: normalizePointText(localPoint.text),
+      };
+      pointMatchIndex.set(pointKey, targetGlobalPointId);
+    }
+
+    if (targetGlobalPointId !== pointId) {
+      changed = true;
+    }
+    return targetGlobalPointId;
+  };
+
   const replacePointIds = (pointIds: string[]): string[] => {
     const nextPointIds: string[] = [];
     const seen = new Set<string>();
 
     for (const pointId of pointIds) {
-      let mappedPointId = pointId;
-      const localPoint = next.local.points[pointId];
-      if (localPoint) {
-        const pointKey = buildPointMatchKey(localPoint.text);
-        if (pointKey) {
-          let targetGlobalPointId = pointMatchIndex.get(pointKey);
-          if (!targetGlobalPointId) {
-            targetGlobalPointId = createGlobalPointId(global);
-            global.points[targetGlobalPointId] = {
-              id: targetGlobalPointId,
-              text: normalizePointText(localPoint.text),
-            };
-            pointMatchIndex.set(pointKey, targetGlobalPointId);
-          }
-
-          if (targetGlobalPointId !== pointId) {
-            mappedPointId = targetGlobalPointId;
-            changed = true;
-          }
-        }
-      }
+      const mappedPointId = mapPointIdToGlobal(pointId);
 
       if (!seen.has(mappedPointId)) {
         nextPointIds.push(mappedPointId);
@@ -737,24 +748,37 @@ function relinkResumeLocalPointsToGlobal(
     );
 
     for (const ref of next.sections[section]) {
-      if (!ref.localId) {
-        continue;
-      }
-      const localEntry = localEntryById.get(ref.localId);
-      if (!localEntry) {
-        continue;
-      }
-
-      const nextPointIds = replacePointIds(localEntry.pointIds);
-      if (JSON.stringify(nextPointIds) !== JSON.stringify(localEntry.pointIds)) {
-        localEntry.pointIds = nextPointIds;
-        changed = true;
+      if (ref.localId) {
+        const localEntry = localEntryById.get(ref.localId);
+        if (localEntry) {
+          const nextPointIds = replacePointIds(localEntry.pointIds);
+          if (JSON.stringify(nextPointIds) !== JSON.stringify(localEntry.pointIds)) {
+            localEntry.pointIds = nextPointIds;
+            changed = true;
+          }
+        }
       }
 
       if (ref.includePointIds) {
         const nextIncludePointIds = replacePointIds(ref.includePointIds);
         if (JSON.stringify(nextIncludePointIds) !== JSON.stringify(ref.includePointIds)) {
           ref.includePointIds = nextIncludePointIds;
+          changed = true;
+        }
+      }
+
+      if (ref.pointOverrides) {
+        const remappedOverrides: Record<string, string> = {};
+        for (const [basePointId, overridePointId] of Object.entries(ref.pointOverrides)) {
+          const mappedOverrideId = mapPointIdToGlobal(overridePointId);
+          if (mappedOverrideId !== basePointId) {
+            remappedOverrides[basePointId] = mappedOverrideId;
+          } else {
+            changed = true;
+          }
+        }
+        if (JSON.stringify(remappedOverrides) !== JSON.stringify(ref.pointOverrides)) {
+          ref.pointOverrides = Object.keys(remappedOverrides).length ? remappedOverrides : undefined;
           changed = true;
         }
       }
@@ -1089,8 +1113,13 @@ async function normalizeStoredState(): Promise<{
     normalizedResumes,
     autoAliasMap,
   );
-  const finalGlobal = aliased.global;
-  const finalResumes = aliased.resumes;
+  const relinked = relinkAllResumesToGlobalPoints(
+    aliased.global,
+    aliased.resumes,
+    nowIso(),
+  );
+  const finalGlobal = relinked.global;
+  const finalResumes = relinked.resumes;
 
   const globalChanged = JSON.stringify(globalRaw) !== JSON.stringify(finalGlobal);
   const resumesChanged = JSON.stringify(resumesRaw) !== JSON.stringify(finalResumes);
@@ -1317,7 +1346,7 @@ export async function updateResumeDocument(
   );
 
   const now = nowIso();
-  const updatedFamily: ResumeDocument[] = family.map((resume) => ({
+  const updatedFamilyDraft: ResumeDocument[] = family.map((resume) => ({
     ...nextResume,
     id: resume.id,
     templateId: resume.templateId,
@@ -1327,9 +1356,13 @@ export async function updateResumeDocument(
     updatedAt: now,
   }));
 
-  await saveResumes(updatedFamily);
-  await compileAndUpdateResumes(global, updatedFamily);
-  await recordCommitEvent(message, updatedFamily.map((resume) => resume.id));
+  const relinked = relinkAllResumesToGlobalPoints(global, updatedFamilyDraft, now);
+  if (JSON.stringify(relinked.global) !== JSON.stringify(global)) {
+    await saveGlobal(relinked.global);
+  }
+  await saveResumes(relinked.resumes);
+  await compileAndUpdateResumes(relinked.global, relinked.resumes);
+  await recordCommitEvent(message, relinked.resumes.map((resume) => resume.id));
   return getResumeDetail(resumeId);
 }
 
